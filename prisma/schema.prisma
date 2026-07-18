@@ -1,0 +1,219 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ============================================================
+// ORDER ENUMS
+// ============================================================
+
+enum OrderStatus {
+  DRAFT
+  PENDING_PAYMENT
+  CONFIRMED
+  PROCESSING
+  PARTIALLY_FULFILLED
+  FULFILLED
+  CANCELLED
+  REFUNDED
+}
+
+enum OrderPaymentStatus {
+  NOT_REQUIRED
+  PENDING
+  AUTHORIZED
+  PAID
+  FAILED
+  PARTIALLY_REFUNDED
+  REFUNDED
+}
+
+enum SellerOrderStatus {
+  PENDING
+  CONFIRMED
+  PROCESSING
+  PARTIALLY_FULFILLED
+  FULFILLED
+  CANCELLED
+  REFUNDED
+}
+
+enum FulfillmentStatus {
+  UNFULFILLED
+  PARTIALLY_FULFILLED
+  FULFILLED
+  CANCELLED
+}
+
+// ============================================================
+// ORDER
+// Represents one buyer checkout.
+// ============================================================
+
+model Order {
+  id             String @id @default(cuid())
+  orderNumber    String @unique
+  idempotencyKey String @unique
+
+  // Scalar references for now.
+  // Convert these into relations when auth and organizations are added.
+  userId              String?
+  buyerOrganizationId String?
+
+  status        OrderStatus        @default(DRAFT)
+  paymentStatus OrderPaymentStatus @default(PENDING)
+  currency      String             @default("INR")
+
+  // All monetary values are stored in integer paise.
+  subtotalPaise BigInt @default(0)
+  discountPaise BigInt @default(0)
+  taxPaise      BigInt @default(0)
+  shippingPaise BigInt @default(0)
+  roundingPaise BigInt @default(0)
+  totalPaise    BigInt @default(0)
+
+  // Immutable historical snapshots.
+  billingAddressSnapshot  Json
+  shippingAddressSnapshot Json
+  buyerSnapshot           Json
+
+  notes       String?
+  placedAt    DateTime?
+  cancelledAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  sellerOrders SellerOrder[]
+
+  @@index([userId, createdAt])
+  @@index([buyerOrganizationId, createdAt])
+  @@index([status, createdAt])
+  @@index([paymentStatus, createdAt])
+  @@index([createdAt])
+  @@map("orders")
+}
+
+// ============================================================
+// SELLER ORDER
+// One seller's portion of an Order.
+//
+// The first release may create only one SellerOrder per Order,
+// but this supports multiple sellers later.
+// ============================================================
+
+model SellerOrder {
+  id                String @id @default(cuid())
+  orderId           String
+  sellerOrderNumber String @unique
+
+  // Scalar reference until Organization is created.
+  sellerOrganizationId String?
+
+  status            SellerOrderStatus @default(PENDING)
+  fulfillmentStatus FulfillmentStatus @default(UNFULFILLED)
+
+  subtotalPaise BigInt @default(0)
+  discountPaise BigInt @default(0)
+  taxPaise      BigInt @default(0)
+  shippingPaise BigInt @default(0)
+  roundingPaise BigInt @default(0)
+  totalPaise    BigInt @default(0)
+
+  // Preserves the seller's historical details.
+  sellerSnapshot Json
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  order Order @relation(
+    fields: [orderId],
+    references: [id],
+    onDelete: Restrict
+  )
+
+  items OrderItem[]
+
+  @@index([orderId])
+  @@index([sellerOrganizationId, createdAt])
+  @@index([status, createdAt])
+  @@index([fulfillmentStatus, createdAt])
+  @@index([createdAt])
+  @@map("seller_orders")
+}
+
+// ============================================================
+// ORDER ITEM
+// Immutable snapshot of the purchased product variant.
+// ============================================================
+
+model OrderItem {
+  id            String @id @default(cuid())
+  sellerOrderId String
+
+  // Scalar references until catalogue models are created.
+  productId        String?
+  productVariantId String?
+  sellerOfferId    String?
+
+  // Immutable catalogue snapshot.
+  productName     String
+  variantName     String?
+  sku             String
+  catalogueNumber String?
+  hsnCode         String?
+
+  // Number of pieces inside one purchasable pack.
+  packSize Int @default(1)
+
+  // Example: piece, bottle, box, kit.
+  unit String @default("piece")
+
+  // Number of purchased packs.
+  quantity Int
+
+  // Price of one complete pack, stored in paise.
+  //
+  // Example:
+  // price = ₹5,200
+  // packSize = 100
+  // quantity = 2
+  //
+  // unitPricePaise = 520000
+  // subtotalPaise = 1040000
+  // total pieces = 200
+  unitPricePaise BigInt
+
+  subtotalPaise      BigInt
+  discountPaise      BigInt @default(0)
+  taxableAmountPaise BigInt
+  taxRateBps         Int    @default(0)
+  taxPaise           BigInt @default(0)
+  totalPaise         BigInt
+
+  // Immutable copies of product, variant, specifications,
+  // pricing and seller-offer information.
+  productSnapshot Json
+  offerSnapshot   Json
+
+  createdAt DateTime @default(now())
+
+  sellerOrder SellerOrder @relation(
+    fields: [sellerOrderId],
+    references: [id],
+    onDelete: Restrict
+  )
+
+  @@index([sellerOrderId])
+  @@index([productId])
+  @@index([productVariantId])
+  @@index([sellerOfferId])
+  @@index([sku])
+  @@index([catalogueNumber])
+  @@index([createdAt])
+  @@map("order_items")
+}

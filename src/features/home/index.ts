@@ -1,0 +1,11 @@
+﻿export { HomePage } from "./home-page";
+export { AnnouncementBar } from "./components/announcement-bar";
+export { HeroSection } from "./components/hero-section";
+export { TrustStrip } from "./components/trust-strip";
+export { CategorySection } from "./components/category-section";
+export { FeaturedProducts } from "./components/featured-products";
+export { BusinessSection } from "./components/business-section";
+export { DocumentationSection } from "./components/documentation-section";
+export { BenefitsSection } from "./components/benefits-section";
+export { StatisticsSection } from "./components/statistics-section";
+export { NewsletterSection } from "./components/newsletter-section";
