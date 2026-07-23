@@ -1,4 +1,4 @@
-﻿import { AnnouncementBar } from "./components/announcement-bar";
+import { AnnouncementBar } from "./components/announcement-bar";
 import { HeroSection } from "./components/hero-section";
 import { TrustStrip } from "./components/trust-strip";
 import { CategorySection } from "./components/category-section";
@@ -11,7 +11,7 @@ import { NewsletterSection } from "./components/newsletter-section";
 
 export function HomePage() {
   return (
-    <main className="min-h-screen overflow-x-hidden bg-[#f8fbff] text-slate-900">
+    <main className="min-h-screen overflow-x-clip bg-[#f8fbff] text-slate-900">
       <AnnouncementBar />
       <HeroSection />
       <TrustStrip />

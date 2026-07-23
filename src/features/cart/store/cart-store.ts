@@ -199,3 +199,30 @@ export const useCartStore = create<InternalCartState>()(
     },
   ),
 );
+
+export function mergeCartForUser(userId: string): CartItem[] {
+  if (typeof window === "undefined") return useCartStore.getState().items;
+
+  const storageKey = `workway-user-cart:${userId}`;
+  let savedItems: CartItem[] = [];
+
+  try {
+    savedItems = JSON.parse(localStorage.getItem(storageKey) ?? "[]") as CartItem[];
+  } catch {
+    savedItems = [];
+  }
+
+  const merged = new Map<string, CartItem>();
+  for (const item of [...savedItems, ...useCartStore.getState().items]) {
+    const key = getCartItemKey(item);
+    const existing = merged.get(key);
+    merged.set(key, existing
+      ? { ...existing, ...item, quantity: Math.max(existing.quantity, item.quantity) }
+      : item);
+  }
+
+  const items = Array.from(merged.values());
+  useCartStore.setState({ items });
+  localStorage.setItem(storageKey, JSON.stringify(items));
+  return items;
+}

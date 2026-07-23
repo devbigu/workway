@@ -8,14 +8,103 @@ datasource db {
 }
 
 // ============================================================
+// BETTER AUTH
+// ============================================================
+
+model User {
+  id            String    @id
+  name          String
+  email         String    @unique
+  emailVerified Boolean   @default(false)
+  image         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  sessions      Session[]
+  accounts      Account[]
+  role          UserRole  @default(CUSTOMER)
+  permissions   String[]  @default([])
+  accessEnabled Boolean   @default(true)
+  blockedAt     DateTime?
+  statusChanges OrderStatusHistory[] @relation("OrderStatusActor")
+  adminNotes    OrderAdminNote[]
+  auditLogs     AuditLog[]
+
+  @@map("users")
+}
+
+model Session {
+  id        String   @id
+  expiresAt DateTime
+  token     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("accounts")
+}
+
+model Verification {
+  id         String    @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime? @default(now())
+  updatedAt  DateTime? @updatedAt
+
+  @@index([identifier])
+  @@map("verifications")
+}
+
+// ============================================================
 // ORDER ENUMS
 // ============================================================
+
+enum UserRole {
+  CUSTOMER
+  ADMIN
+  ORDER_MANAGER
+  PRODUCT_MANAGER
+  SUPPORT_STAFF
+}
 
 enum OrderStatus {
   DRAFT
   PENDING_PAYMENT
+  PLACED
   CONFIRMED
   PROCESSING
+  PACKED
+  SHIPPED
+  OUT_FOR_DELIVERY
+  DELIVERED
+  CANCELLATION_REQUESTED
+  RETURN_REQUESTED
+  RETURNED
+  REFUND_PROCESSING
   PARTIALLY_FULFILLED
   FULFILLED
   CANCELLED
@@ -36,6 +125,14 @@ enum SellerOrderStatus {
   PENDING
   CONFIRMED
   PROCESSING
+  PACKED
+  SHIPPED
+  OUT_FOR_DELIVERY
+  DELIVERED
+  CANCELLATION_REQUESTED
+  RETURN_REQUESTED
+  RETURNED
+  REFUND_PROCESSING
   PARTIALLY_FULFILLED
   FULFILLED
   CANCELLED
@@ -89,6 +186,8 @@ model Order {
   updatedAt DateTime @updatedAt
 
   sellerOrders SellerOrder[]
+  statusHistory OrderStatusHistory[]
+  adminNotes OrderAdminNote[]
 
   @@index([userId, createdAt])
   @@index([buyerOrganizationId, createdAt])
@@ -96,6 +195,49 @@ model Order {
   @@index([paymentStatus, createdAt])
   @@index([createdAt])
   @@map("orders")
+}
+
+
+model OrderStatusHistory {
+  id String @id @default(cuid())
+  orderId String
+  fromStatus OrderStatus
+  toStatus OrderStatus
+  reason String?
+  note String?
+  changedById String
+  createdAt DateTime @default(now())
+  order Order @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  changedBy User @relation("OrderStatusActor", fields: [changedById], references: [id], onDelete: Restrict)
+  @@index([orderId, createdAt])
+  @@map("order_status_history")
+}
+model OrderAdminNote {
+  id String @id @default(cuid())
+  orderId String
+  authorId String
+  body String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  order Order @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  author User @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  @@index([orderId, createdAt])
+  @@map("order_admin_notes")
+}
+model AuditLog {
+  id String @id @default(cuid())
+  actorId String
+  action String
+  entityType String
+  entityId String?
+  metadata Json?
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+  actor User @relation(fields: [actorId], references: [id], onDelete: Restrict)
+  @@index([actorId, createdAt])
+  @@index([entityType, entityId])
+  @@map("audit_logs")
 }
 
 // ============================================================
@@ -130,11 +272,7 @@ model SellerOrder {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  order Order @relation(
-    fields: [orderId],
-    references: [id],
-    onDelete: Restrict
-  )
+  order Order @relation(fields: [orderId], references: [id], onDelete: Restrict)
 
   items OrderItem[]
 
@@ -202,11 +340,7 @@ model OrderItem {
 
   createdAt DateTime @default(now())
 
-  sellerOrder SellerOrder @relation(
-    fields: [sellerOrderId],
-    references: [id],
-    onDelete: Restrict
-  )
+  sellerOrder SellerOrder @relation(fields: [sellerOrderId], references: [id], onDelete: Restrict)
 
   @@index([sellerOrderId])
   @@index([productId])

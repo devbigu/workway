@@ -1,6 +1,9 @@
-﻿import Link from "next/link";
+"use client";
+
+import { motion, useReducedMotion, useScroll, useTransform } from "framer-motion";
+import Link from "next/link";
+import { useEffect, useRef, useState } from "react";
 import { products } from "../data";
-import { StaggerGroup } from "../animation/stagger-group";
 import { Reveal } from "../animation/reveal";
 import { Icon } from "./icon";
 import { SectionHeading } from "./section-heading";
@@ -54,15 +57,41 @@ function ProductCard({ product }: { product: Product }) {
 }
 
 export function FeaturedProducts() {
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const galleryRef = useRef<HTMLDivElement>(null);
+  const [travelDistance, setTravelDistance] = useState(0);
+  const prefersReducedMotion = useReducedMotion();
+  const { scrollYProgress } = useScroll({ target: scrollContainerRef, offset: ["start start", "end end"] });
+  const x = useTransform(scrollYProgress, [0, 1], [0, -travelDistance]);
+
+  useEffect(() => {
+    const gallery = galleryRef.current;
+    if (!gallery) return;
+    const measure = () => setTravelDistance(Math.max(0, gallery.scrollWidth - window.innerWidth));
+    measure();
+    const resizeObserver = new ResizeObserver(measure);
+    resizeObserver.observe(gallery);
+    window.addEventListener("resize", measure);
+    return () => { resizeObserver.disconnect(); window.removeEventListener("resize", measure); };
+  }, []);
+
   return (
-    <section id="products" className="scroll-mt-28 border-y border-slate-200 bg-white py-20 sm:py-24 lg:py-32">
+    <section id="products" className="scroll-mt-28 overflow-clip border-y border-slate-200 bg-white pt-20 sm:pt-24 lg:pt-32">
       <div className="mx-auto max-w-[1380px] px-4 sm:px-6 lg:px-8">
         <Reveal>
           <SectionHeading eyebrow="Curated selection" title="Featured scientific products" description="Frequently sourced products selected for consistent quality, reliable availability, and complete technical information." action={<Link href="/products" className="ww-button-pop inline-flex items-center gap-2 rounded-full border border-slate-300 px-5 py-3 text-sm font-semibold text-slate-900 hover:border-slate-950 hover:bg-slate-950 hover:text-white">Browse catalogue <Icon name="arrow" className="h-4 w-4 transition group-hover:translate-x-1" /></Link>} />
         </Reveal>
-        <StaggerGroup className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4" stagger={80}>
-          {products.slice(0, 8).map((product) => <ProductCard key={product.id} product={product} />)}
-        </StaggerGroup>
+      </div>
+      <div ref={scrollContainerRef} className={prefersReducedMotion ? "px-4 pb-20 sm:px-6 sm:pb-24 lg:px-8 lg:pb-32" : "relative h-[500vh] sm:h-[575vh]"}>
+        <div className={prefersReducedMotion ? "mx-auto max-w-[1380px]" : "sticky top-0 flex h-svh items-center overflow-hidden"}>
+          <motion.div ref={galleryRef} className={prefersReducedMotion ? "grid gap-5 sm:grid-cols-2 xl:grid-cols-4" : "flex w-max gap-5 px-[max(1rem,calc((100vw-min(82vw,23rem))/2))] sm:px-[max(1.5rem,calc((100vw-min(44vw,23rem))/2))] lg:px-[max(2rem,calc((100vw-23rem)/2))]"} style={prefersReducedMotion ? undefined : { x }}>
+            {products.slice(0, 8).map((product) => (
+              <div key={product.id} className={prefersReducedMotion ? undefined : "w-[min(82vw,23rem)] shrink-0 sm:w-[min(44vw,23rem)] lg:w-[23rem]"}>
+                <ProductCard product={product} />
+              </div>
+            ))}
+          </motion.div>
+        </div>
       </div>
     </section>
   );

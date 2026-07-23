@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import { afterEach, describe, test } from "node:test";
 
-import { loadProducts } from "../src/features/products/data";
+import {
+  loadProducts,
+  mergeProducts,
+} from "../src/features/products/data";
 import type { Product } from "../src/features/products/types";
 import {
   findProductByRouteValue,
@@ -60,10 +63,10 @@ afterEach(() => {
 
 describe("product catalogue data", () => {
   test("loadProducts fetches the public JSON and returns only valid products", async () => {
-    let requestedUrl = "";
+    const requestedUrls: string[] = [];
 
     globalThis.fetch = ((input: RequestInfo | URL) => {
-      requestedUrl = String(input);
+      requestedUrls.push(String(input));
 
       return Promise.resolve({
         ok: true,
@@ -77,13 +80,38 @@ describe("product catalogue data", () => {
 
     const products = await loadProducts();
 
-    assert.equal(
-      requestedUrl,
+    assert.deepEqual(requestedUrls, [
       "/data/omsons_products_from_excel_with_images.json",
-    );
+      "/data/nested_omsons_products.json",
+    ]);
     assert.deepEqual(products, [product]);
   });
 
+  test("mergeProducts enriches matching SKUs and includes missing variants", () => {
+    const extraVariant = {
+      ...pricedVariant,
+      id: "variant-extra",
+      sku: "OM-300",
+      slug: "om-300-extra",
+    };
+    const richerProduct: Product = {
+      ...product,
+      features: ["More complete catalogue data"],
+      variants: [pricedVariant, extraVariant],
+    };
+
+    const merged = mergeProducts([product], [richerProduct]);
+
+    assert.equal(merged.length, 1);
+    assert.deepEqual(merged[0].features, [
+      "Stable catalogue data",
+      "More complete catalogue data",
+    ]);
+    assert.deepEqual(
+      merged[0].variants.map((variant) => variant.sku),
+      ["OM-200", "OM-100", "OM-300"],
+    );
+  });
   test("findProductByRouteValue prefers slug and supports sku and variant fallbacks", () => {
     assert.equal(
       findProductByRouteValue([product], "sample-product"),

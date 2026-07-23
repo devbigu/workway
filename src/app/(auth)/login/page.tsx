@@ -1,9 +1,11 @@
+import { Suspense } from "react";
+
+import { AuthForm } from "@/features/auth/components/auth-form";
+
 export default function Page() {
   return (
-    <main className="p-6">
-      <h1 className="text-2xl font-semibold">
-        /(auth)/login
-      </h1>
-    </main>
+    <Suspense fallback={<main className="min-h-screen animate-pulse bg-[#f6f9fd]" />}>
+      <AuthForm mode="login" />
+    </Suspense>
   );
 }

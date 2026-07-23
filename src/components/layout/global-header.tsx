@@ -168,10 +168,10 @@ export function GlobalHeader() {
           >
             <div
               className={[
-                "absolute right-10 overflow-hidden transition-all duration-[400ms] ease-in-out",
+                "relative h-10 overflow-hidden rounded-full transition-[width] duration-[400ms] ease-in-out",
                 isSearchOpen
-                  ? "w-64 translate-x-0 opacity-100"
-                  : "pointer-events-none w-0 translate-x-4 opacity-0",
+                  ? "w-64"
+                  : "w-10",
               ].join(" ")}
             >
               <input
@@ -183,23 +183,35 @@ export function GlobalHeader() {
                 }
                 onKeyDown={handleSearchKeyDown}
                 placeholder="Search products..."
-                className="h-10 w-full rounded-full border border-slate-200 bg-white px-4 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                aria-hidden={!isSearchOpen}
+                tabIndex={isSearchOpen ? 0 : -1}
+                className={[
+                  "h-10 w-full rounded-full border border-slate-200 bg-white pl-11 pr-4 text-sm outline-none transition-opacity duration-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100",
+                  isSearchOpen
+                    ? "opacity-100"
+                    : "pointer-events-none opacity-0",
+                ].join(" ")}
               />
-            </div>
 
-            <button
-              type="button"
-              onClick={() =>
-                setIsSearchOpen((current) => !current)
-              }
-              aria-label={
-                isSearchOpen ? "Close search" : "Open search"
-              }
-              aria-expanded={isSearchOpen}
-              className="grid h-10 w-10 place-items-center rounded-full text-slate-700 transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <Icon name="search" className="h-5 w-5" />
-            </button>
+              <button
+                type="button"
+                onClick={() =>
+                  setIsSearchOpen((current) => !current)
+                }
+                aria-label={
+                  isSearchOpen ? "Close search" : "Open search"
+                }
+                aria-expanded={isSearchOpen}
+                className={[
+                  "absolute left-0 top-0 grid h-10 w-10 place-items-center rounded-full text-slate-700 transition focus:outline-none focus:ring-2 focus:ring-blue-500",
+                  isSearchOpen
+                    ? "hover:text-blue-600"
+                    : "hover:bg-slate-100",
+                ].join(" ")}
+              >
+                <Icon name="search" className="h-5 w-5" />
+              </button>
+            </div>
           </div>
           <AccountMenu />
           <Link href="/cart" aria-label="Cart" className="relative grid h-10 w-10 place-items-center rounded-full text-slate-700 transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 sm:hidden">

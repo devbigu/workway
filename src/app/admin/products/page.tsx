@@ -1,9 +1,1 @@
-export default function Page() {
-  return (
-    <main className="p-6">
-      <h1 className="text-2xl font-semibold">
-        /admin/products
-      </h1>
-    </main>
-  );
-}
+import{requireAdminPage}from"@/lib/admin-auth";export default async function Page(){await requireAdminPage("products:read");return <div className="space-y-5"><div><p className="text-sm font-semibold text-blue-600">Catalog operations</p><h1 className="text-3xl font-bold">Products</h1><p className="text-sm text-slate-500">Create, edit, feature and archive catalog products.</p></div><div className="rounded-2xl border bg-white p-12 text-center"><span className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-blue-50 text-blue-700">ˇ</span><h2 className="mt-4 font-bold">Products workspace</h2><p className="mx-auto mt-2 max-w-md text-sm text-slate-500">Use this protected workspace to manage records. Server mutations require the matching product permission and are audit logged.</p><button className="mt-5 rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white">Create new</button></div></div>}

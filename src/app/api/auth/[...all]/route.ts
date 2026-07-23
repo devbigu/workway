@@ -1,8 +1,5 @@
-import { NextResponse } from "next/server";
+import { toNextJsHandler } from "better-auth/next-js";
 
-export async function GET() {
-  return NextResponse.json(
-    { message: "Endpoint not implemented" },
-    { status: 501 },
-  );
-}
+import { auth } from "@/lib/auth";
+
+export const { GET, POST } = toNextJsHandler(auth);

@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 
+import { ProceedToCheckoutButton } from "@/features/cart/components/proceed-to-checkout-button";
 import {
   getCartItemKey,
   useCartStore,
@@ -240,12 +241,7 @@ export default function CartPage() {
               </dd>
             </div>
           </dl>
-          <Link
-            href="/checkout"
-            className="mt-6 flex w-full justify-center rounded-[14px] bg-blue-600 px-5 py-3.5 text-sm font-semibold text-white transition hover:bg-blue-700"
-          >
-            Proceed to checkout
-          </Link>
+          <ProceedToCheckoutButton />
           <button
             type="button"
             onClick={clearCart}
