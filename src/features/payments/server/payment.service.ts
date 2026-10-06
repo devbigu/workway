@@ -48,6 +48,13 @@ export async function completeOrderPayment(
       data: { status: "CONFIRMED" },
     });
 
+    await transaction.adminNotification.create({
+      data: {
+        title: `New order ${order.orderNumber} from ${String(snapshot.name ?? snapshot.email ?? "a customer")} · ₹${(Number(order.totalPaise) / 100).toLocaleString("en-IN")}`,
+        href: `/admin/orders/${order.id}`,
+      },
+    });
+
     return updated;
   });
 }

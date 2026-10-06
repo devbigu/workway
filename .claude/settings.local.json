@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(wsl.exe -d Ubuntu-26.04 -- bash -lc 'export PATH=\"$HOME/.nvm/versions/node/v20.20.2/bin:$PATH\"; cd /home/jojo/projects/workway && ./node_modules/.bin/tsc --noEmit -p tsconfig.json 2>&1 | grep -E \"globals\\\\.css|layout\\\\.tsx\" ; echo \"=== theme-file errors above \\(empty = none\\) ===\"; ./node_modules/.bin/tsc --noEmit -p tsconfig.json 2>&1 | grep -cE \"^src/.*error TS\"')"
+    ]
+  }
+}

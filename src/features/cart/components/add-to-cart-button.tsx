@@ -18,8 +18,7 @@ type AddToCartButtonProps = {
   onAdded?: () => void;
 };
 
-const defaultCounterClassName =
-  "mt-5 grid w-full grid-cols-[44px_minmax(0,1fr)_44px] overflow-hidden rounded-[13px] border border-blue-200 bg-blue-50 text-sm font-semibold text-blue-700 shadow-[0_8px_20px_rgba(37,99,235,0.12)]";
+const defaultCounterClassName = "qty qty-block";
 
 export function AddToCartButton({
   item,
@@ -34,6 +33,7 @@ export function AddToCartButton({
   const addItem = useCartStore((state) => state.addItem);
   const incrementItem = useCartStore((state) => state.incrementItem);
   const decrementItem = useCartStore((state) => state.decrementItem);
+  const cartEnabled = useCartStore((state) => state.cartEnabled);
   const isDisabled = disabled || !item;
   const cartKey = item
     ? createCartKey(item.productId, item.variantId)
@@ -45,9 +45,12 @@ export function AddToCartButton({
       )?.quantity ?? 0
     : 0;
 
+  if (!cartEnabled) return null;
+
   if (item && cartKey && cartQuantity > 0) {
     return (
       <div
+        role="group"
         className={counterClassName ?? defaultCounterClassName}
         aria-label={`${item.productName} ${item.variantSku} quantity in cart`}
       >
@@ -55,20 +58,16 @@ export function AddToCartButton({
           type="button"
           onClick={() => decrementItem(cartKey)}
           aria-label={`Decrease ${item.productName} ${item.variantSku} pack quantity`}
-          className="grid h-11 place-items-center text-lg transition hover:bg-blue-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-inset"
         >
-          -
+          &minus;
         </button>
 
-        <span className="grid h-11 place-items-center border-x border-blue-200 bg-white text-slate-950">
-          {cartQuantity}
-        </span>
+        <output aria-live="polite">{cartQuantity}</output>
 
         <button
           type="button"
           onClick={() => incrementItem(cartKey)}
           aria-label={`Increase ${item.productName} ${item.variantSku} pack quantity`}
-          className="grid h-11 place-items-center text-lg transition hover:bg-blue-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-inset"
         >
           +
         </button>

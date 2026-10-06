@@ -1,19 +1,17 @@
-﻿"use client";
+"use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 
-const links = [
+const links: readonly (readonly [string, string])[] = [
   ["Products", "/products"],
-  ["Categories", "/#categories"],
-  ["Brands", "/products"],
+  ["Categories", "/categories"],
   ["Resources", "/#documentation"],
   ["About", "/about"],
-] as const;
+  ["Account", "/account"],
+];
 
 export function MobileNav({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const [rendered, setRendered] = useState(open);
-
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
@@ -22,22 +20,19 @@ export function MobileNav({ open, onClose }: { open: boolean; onClose: () => voi
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [onClose]);
 
-  useEffect(() => {
-    if (open) {
-      const showTimeout = window.setTimeout(() => setRendered(true), 0);
-      return () => window.clearTimeout(showTimeout);
-    }
-    const hideTimeout = window.setTimeout(() => setRendered(false), 320);
-    return () => window.clearTimeout(hideTimeout);
-  }, [open]);
-
-  const visible = open || rendered;
+  if (!open) return null;
 
   return (
-    <nav id="workway-mobile-menu" className={`origin-top border-t border-slate-200 bg-white px-4 lg:hidden ${visible ? "block" : "hidden"} ${open ? "pointer-events-auto animate-[ww-mobile-menu-open_360ms_cubic-bezier(.2,1.35,.35,1)_both]" : "pointer-events-none opacity-0 transition duration-300 -translate-y-2 scale-y-[.96]"}`} aria-label="Mobile navigation" aria-hidden={!open}>
-      <div className="mx-auto grid max-w-[1380px] gap-2 py-5">
-        {links.map(([label, href], index) => <Link key={label} tabIndex={open ? 0 : -1} onClick={onClose} href={href} className={`rounded-2xl px-4 py-3 text-sm font-semibold text-slate-700 transition duration-300 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 ${open ? "translate-y-0 opacity-100" : "-translate-y-1 opacity-0"}`} style={{ transitionDelay: open ? `${index * 70}ms` : `${(links.length - index) * 35}ms` }}>{label}</Link>)}
-        <Link tabIndex={open ? 0 : -1} href="/contact" onClick={onClose} className={`mt-2 rounded-full bg-blue-600 px-5 py-3 text-center text-sm font-semibold text-white transition duration-300 focus:outline-none focus:ring-2 focus:ring-blue-500 ${open ? "translate-y-0 opacity-100" : "-translate-y-1 opacity-0"}`} style={{ transitionDelay: open ? `${links.length * 75}ms` : "0ms" }}>Request Quote</Link>
+    <nav id="rootra-mobile-menu" aria-label="Mobile navigation" className="border-t border-line bg-paper lg:hidden [animation:lab-pop_var(--lab-dur-base)_var(--lab-ease-out)]">
+      <div className="page-wrap py-3">
+        <ul>
+          {links.map(([label, href]) => (
+            <li key={label} className="border-b border-line">
+              <Link href={href} onClick={onClose} className="flex min-h-12 items-center text-base font-medium text-ink no-underline hover:text-accent">{label}</Link>
+            </li>
+          ))}
+        </ul>
+        <Link href="/contact" onClick={onClose} className="btn btn-primary btn-block mt-4">Request quote</Link>
       </div>
     </nav>
   );

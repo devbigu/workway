@@ -9,8 +9,8 @@ if (!process.env.DATABASE_URL) {
   throw new Error("DATABASE_URL is required in .env");
 }
 
-const databaseName = "workway_test";
-const databaseUser = "workway_test_user";
+const databaseName = "worklab_test";
+const databaseUser = "worklab_test_user";
 const databasePassword = randomBytes(24).toString("hex");
 const authSecret = randomBytes(32).toString("hex");
 const testUserPassword = `Ww!${randomBytes(12).toString("hex")}`;
@@ -66,7 +66,7 @@ await writeFile(
     "BETTER_AUTH_URL=http://localhost:3100",
     "PAYMENT_SANDBOX_MODE=true",
     "TEST_USER_NAME=Sandbox Buyer",
-    "TEST_USER_EMAIL=sandbox.user@workway.test",
+    "TEST_USER_EMAIL=sandbox.user@worklab.test",
     `TEST_USER_PASSWORD=${testUserPassword}`,
     "",
   ].join("\n"),

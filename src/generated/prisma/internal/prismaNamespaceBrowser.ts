@@ -55,12 +55,17 @@ export const ModelName = {
   Session: 'Session',
   Account: 'Account',
   Verification: 'Verification',
+  Address: 'Address',
   Order: 'Order',
+  OrderAddress: 'OrderAddress',
   OrderStatusHistory: 'OrderStatusHistory',
   OrderAdminNote: 'OrderAdminNote',
   AuditLog: 'AuditLog',
   SellerOrder: 'SellerOrder',
-  OrderItem: 'OrderItem'
+  OrderItem: 'OrderItem',
+  SavedItem: 'SavedItem',
+  SupportRequest: 'SupportRequest',
+  AdminNotification: 'AdminNotification'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -83,6 +88,7 @@ export const UserScalarFieldEnum = {
   id: 'id',
   name: 'name',
   email: 'email',
+  phone: 'phone',
   emailVerified: 'emailVerified',
   image: 'image',
   createdAt: 'createdAt',
@@ -141,6 +147,28 @@ export const VerificationScalarFieldEnum = {
 export type VerificationScalarFieldEnum = (typeof VerificationScalarFieldEnum)[keyof typeof VerificationScalarFieldEnum]
 
 
+export const AddressScalarFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  fullName: 'fullName',
+  phone: 'phone',
+  addressLine1: 'addressLine1',
+  addressLine2: 'addressLine2',
+  landmark: 'landmark',
+  city: 'city',
+  state: 'state',
+  postalCode: 'postalCode',
+  country: 'country',
+  type: 'type',
+  isSaved: 'isSaved',
+  isDefault: 'isDefault',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type AddressScalarFieldEnum = (typeof AddressScalarFieldEnum)[keyof typeof AddressScalarFieldEnum]
+
+
 export const OrderScalarFieldEnum = {
   id: 'id',
   orderNumber: 'orderNumber',
@@ -162,11 +190,32 @@ export const OrderScalarFieldEnum = {
   notes: 'notes',
   placedAt: 'placedAt',
   cancelledAt: 'cancelledAt',
+  archivedAt: 'archivedAt',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 } as const
 
 export type OrderScalarFieldEnum = (typeof OrderScalarFieldEnum)[keyof typeof OrderScalarFieldEnum]
+
+
+export const OrderAddressScalarFieldEnum = {
+  id: 'id',
+  orderId: 'orderId',
+  sourceAddressId: 'sourceAddressId',
+  fullName: 'fullName',
+  phone: 'phone',
+  addressLine1: 'addressLine1',
+  addressLine2: 'addressLine2',
+  landmark: 'landmark',
+  city: 'city',
+  state: 'state',
+  postalCode: 'postalCode',
+  country: 'country',
+  type: 'type',
+  createdAt: 'createdAt'
+} as const
+
+export type OrderAddressScalarFieldEnum = (typeof OrderAddressScalarFieldEnum)[keyof typeof OrderAddressScalarFieldEnum]
 
 
 export const OrderStatusHistoryScalarFieldEnum = {
@@ -258,6 +307,43 @@ export const OrderItemScalarFieldEnum = {
 } as const
 
 export type OrderItemScalarFieldEnum = (typeof OrderItemScalarFieldEnum)[keyof typeof OrderItemScalarFieldEnum]
+
+
+export const SavedItemScalarFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  productId: 'productId',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type SavedItemScalarFieldEnum = (typeof SavedItemScalarFieldEnum)[keyof typeof SavedItemScalarFieldEnum]
+
+
+export const SupportRequestScalarFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  orderId: 'orderId',
+  category: 'category',
+  subject: 'subject',
+  message: 'message',
+  status: 'status',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type SupportRequestScalarFieldEnum = (typeof SupportRequestScalarFieldEnum)[keyof typeof SupportRequestScalarFieldEnum]
+
+
+export const AdminNotificationScalarFieldEnum = {
+  id: 'id',
+  title: 'title',
+  href: 'href',
+  readAt: 'readAt',
+  createdAt: 'createdAt'
+} as const
+
+export type AdminNotificationScalarFieldEnum = (typeof AdminNotificationScalarFieldEnum)[keyof typeof AdminNotificationScalarFieldEnum]
 
 
 export const SortOrder = {

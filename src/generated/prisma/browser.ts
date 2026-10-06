@@ -38,10 +38,20 @@ export type Account = Prisma.AccountModel
  */
 export type Verification = Prisma.VerificationModel
 /**
+ * Model Address
+ * 
+ */
+export type Address = Prisma.AddressModel
+/**
  * Model Order
  * 
  */
 export type Order = Prisma.OrderModel
+/**
+ * Model OrderAddress
+ * 
+ */
+export type OrderAddress = Prisma.OrderAddressModel
 /**
  * Model OrderStatusHistory
  * 
@@ -67,3 +77,18 @@ export type SellerOrder = Prisma.SellerOrderModel
  * 
  */
 export type OrderItem = Prisma.OrderItemModel
+/**
+ * Model SavedItem
+ * 
+ */
+export type SavedItem = Prisma.SavedItemModel
+/**
+ * Model SupportRequest
+ * 
+ */
+export type SupportRequest = Prisma.SupportRequestModel
+/**
+ * Model AdminNotification
+ * 
+ */
+export type AdminNotification = Prisma.AdminNotificationModel

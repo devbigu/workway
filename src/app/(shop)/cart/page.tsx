@@ -3,18 +3,22 @@
 import Image from "next/image";
 import Link from "next/link";
 
+import { EmptyState } from "@/components/shared/empty-state";
+import { PageHeader } from "@/components/shared/page-header";
 import { ProceedToCheckoutButton } from "@/features/cart/components/proceed-to-checkout-button";
 import {
   getCartItemKey,
   useCartStore,
 } from "@/features/cart/store/cart-store";
 import type { CartItem } from "@/features/cart/types";
+import { Icon } from "@/features/home/components/icon";
 
-function formatPaise(value: number): string {
+function formatPaise(value: number, decimals = 0): string {
   return new Intl.NumberFormat("en-IN", {
     style: "currency",
     currency: "INR",
-    maximumFractionDigits: 0,
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
   }).format(value / 100);
 }
 
@@ -23,6 +27,8 @@ function getProductVariantHref(item: CartItem): string {
     item.variantId,
   )}`;
 }
+
+const crumbs = [{ label: "Home", href: "/" }, { label: "Cart" }];
 
 export default function CartPage() {
   const items = useCartStore((state) => state.items);
@@ -36,13 +42,17 @@ export default function CartPage() {
   const clearCart = useCartStore((state) => state.clearCart);
   const subtotalPaise = useCartStore((state) => state.getSubtotalPaise());
   const totalPacks = useCartStore((state) => state.getTotalPacks());
-  const totalPieces = useCartStore((state) => state.getTotalPieces());
 
   if (!hasHydrated) {
     return (
-      <main className="min-h-screen bg-[#f8fbff] px-4 py-12 text-slate-950">
-        <div className="mx-auto max-w-[1180px]">
-          <div className="h-48 animate-pulse rounded-[24px] border border-slate-200 bg-white" />
+      <main className="page-wrap pb-16" aria-busy="true">
+        <div className="border-b border-line pb-6 pt-8 lg:pt-12">
+          <div className="skeleton h-3 w-24" />
+          <div className="skeleton mt-4 h-12 w-40" />
+        </div>
+        <div className="mt-8 grid gap-12 lg:mt-12 lg:grid-cols-[minmax(0,1fr)_380px]">
+          <div className="grid gap-6">{[1, 2, 3].map((row) => <div key={row} className="skeleton h-20" />)}</div>
+          <div className="skeleton h-80 rounded-md" />
         </div>
       </main>
     );
@@ -50,206 +60,140 @@ export default function CartPage() {
 
   if (items.length === 0) {
     return (
-      <main className="grid min-h-[70vh] place-items-center bg-[#f8fbff] px-4 text-slate-950">
-        <div className="max-w-md rounded-[24px] border border-slate-200 bg-white p-8 text-center shadow-[0_18px_50px_rgba(15,23,42,0.08)]">
-          <h1 className="text-2xl font-semibold tracking-[-0.03em]">
-            Your cart is empty
-          </h1>
-          <p className="mt-3 text-sm leading-6 text-slate-500">
-            Explore the catalogue and add priced product variants to your cart.
-          </p>
-          <Link
-            href="/products"
-            className="mt-6 inline-flex rounded-full bg-blue-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-blue-700"
-          >
-            Explore Products
-          </Link>
-        </div>
+      <main className="page-wrap pb-16">
+        <PageHeader crumbs={crumbs} title="Cart" />
+        <EmptyState
+          title={<em>Nothing measured yet.</em>}
+          text="Your cart is empty. Add packs from the catalogue and they will appear here."
+          action={<Link href="/products" className="btn btn-primary">Explore products</Link>}
+        />
       </main>
     );
   }
 
+  const quoteHref = `/contact?${items.map((item) => `sku=${encodeURIComponent(item.variantSku)}&qty=${item.quantity}`).join("&")}`;
+
   return (
-    <main className="min-h-screen bg-[#f8fbff] text-slate-950">
-      <section className="border-b border-slate-200 bg-white">
-        <div className="mx-auto max-w-[1180px] px-4 py-8 sm:px-6 lg:px-8">
-          <h1 className="text-3xl font-semibold tracking-[-0.04em]">
-            Cart
-          </h1>
-          <p className="mt-2 text-sm text-slate-500">
-            Review selected catalogue variants before checkout.
-          </p>
-        </div>
-      </section>
+    <main>
+      <div className="page-wrap pb-16">
+        <PageHeader
+          crumbs={crumbs}
+          title="Cart"
+          meta={`${totalPacks} ${totalPacks === 1 ? "pack" : "packs"} · ${items.length} ${items.length === 1 ? "line" : "lines"}`}
+        />
 
-      <div className="mx-auto grid max-w-[1180px] gap-8 px-4 py-8 sm:px-6 lg:grid-cols-[minmax(0,1fr)_340px] lg:px-8">
-        <section className="space-y-4">
-          {items.map((item) => {
-            const cartKey = getCartItemKey(item);
-            const lineTotalPaise = item.packPricePaise * item.quantity;
-            const totalItemPieces = item.packSize * item.quantity;
-            const perPiecePaise = Math.round(
-              item.packPricePaise / item.packSize,
-            );
+        <div className="mt-8 grid items-start gap-12 lg:mt-12 lg:grid-cols-[minmax(0,1fr)_380px]">
+          <section aria-label="Cart lines">
+            <table className="table table-stack">
+              <thead>
+                <tr>
+                  <th scope="col">Product</th>
+                  <th scope="col" className="num">Unit price</th>
+                  <th scope="col">Qty</th>
+                  <th scope="col" className="num">Line total</th>
+                  <th scope="col"><span className="sr-only">Remove</span></th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((item) => {
+                  const cartKey = getCartItemKey(item);
 
-            return (
-              <article
-                key={cartKey}
-                className="grid gap-4 rounded-[22px] border border-slate-200 bg-white p-4 shadow-[0_12px_35px_rgba(15,23,42,0.06)] sm:grid-cols-[120px_minmax(0,1fr)]"
+                  return (
+                    <tr key={cartKey}>
+                      <td>
+                        <div className="flex gap-4">
+                          <Link href={getProductVariantHref(item)} className="relative grid h-16 w-16 shrink-0 place-items-center overflow-hidden rounded-sm bg-surface-alt text-ink-3" tabIndex={-1} aria-hidden="true">
+                            {item.image ? (
+                              <Image src={item.image} alt="" fill sizes="64px" className="object-contain p-2 mix-blend-multiply" />
+                            ) : (
+                              <Icon name="glassware" className="h-6 w-6" strokeWidth={1} />
+                            )}
+                          </Link>
+                          <div className="min-w-0">
+                            <Link href={getProductVariantHref(item)} className="link-quiet font-medium text-ink">
+                              {item.productName}
+                            </Link>
+                            <p className="meta" title={item.variantSku}>{item.variantSku} · Pack of {item.packSize}</p>
+                            {item.variantLabel && <p className="text-sm text-ink-3">{item.variantLabel}</p>}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="num" data-label="Unit price">
+                        <span>
+                          {formatPaise(item.packPricePaise)}
+                          <span className="meta block">{formatPaise(item.packPricePaise / item.packSize, 2)} per unit</span>
+                        </span>
+                      </td>
+                      <td data-label="Qty">
+                        <div className="qty" role="group" aria-label={`Packs of ${item.variantSku}`}>
+                          <button type="button" onClick={() => decrementItem(cartKey)} aria-label={`Decrease ${item.variantSku}`}>&minus;</button>
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            pattern="[0-9]*"
+                            value={item.quantity}
+                            onChange={(event) =>
+                              setItemQuantity(
+                                cartKey,
+                                Number.parseInt(event.target.value, 10),
+                              )
+                            }
+                            aria-label={`Packs for ${item.variantSku}`}
+                          />
+                          <button type="button" onClick={() => incrementItem(cartKey)} aria-label={`Increase ${item.variantSku}`}>+</button>
+                        </div>
+                      </td>
+                      <td className="num" data-label="Line total">
+                        <span>{formatPaise(item.packPricePaise * item.quantity)}</span>
+                      </td>
+                      <td data-label="">
+                        <button type="button" onClick={() => removeItem(cartKey)} className="btn btn-text text-sm" aria-label={`Remove ${item.productName} ${item.variantSku}`}>
+                          Remove
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+
+            <div className="mt-6 flex items-center justify-between gap-4">
+              <Link href="/products" className="link link-arrow text-sm">Continue shopping</Link>
+              <button
+                type="button"
+                onClick={() => {
+                  if (window.confirm("Remove every line from your cart?")) clearCart();
+                }}
+                className="btn btn-text text-sm text-error"
               >
-                <Link
-                  href={getProductVariantHref(item)}
-                  className="relative aspect-square overflow-hidden rounded-[16px] bg-slate-50"
-                >
-                  {item.image ? (
-                    <Image
-                      src={item.image}
-                      alt={item.productName}
-                      fill
-                      sizes="120px"
-                      className="object-contain p-3"
-                    />
-                  ) : (
-                    <div className="grid h-full place-items-center text-xs text-slate-400">
-                      No image
-                    </div>
-                  )}
-                </Link>
-
-                <div className="min-w-0">
-                  <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                    <div className="min-w-0">
-                      <Link
-                        href={getProductVariantHref(item)}
-                        className="text-lg font-semibold tracking-[-0.02em] text-slate-950 transition hover:text-blue-700"
-                      >
-                        {item.productName}
-                      </Link>
-                      <p className="mt-1 text-sm font-medium text-slate-700">
-                        {item.variantName}
-                      </p>
-                      <p className="mt-1 text-xs text-slate-500">
-                        Cat. No. {item.variantSku}
-                      </p>
-                      <p className="mt-2 text-sm text-slate-500">
-                        {item.variantLabel || "Selected specification"}
-                      </p>
-                    </div>
-
-                    <div className="text-left lg:text-right">
-                      <p className="text-lg font-bold text-slate-950">
-                        {formatPaise(lineTotalPaise)}
-                      </p>
-                      <p className="mt-1 text-xs text-slate-500">
-                        {formatPaise(item.packPricePaise)} per pack
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="mt-5 grid gap-3 text-sm text-slate-600 md:grid-cols-3">
-                    <div>
-                      <span className="block text-xs text-slate-400">Pack size</span>
-                      <strong className="font-semibold text-slate-900">
-                        {item.packSize} pieces
-                      </strong>
-                    </div>
-                    <div>
-                      <span className="block text-xs text-slate-400">Price per piece</span>
-                      <strong className="font-semibold text-slate-900">
-                        {formatPaise(perPiecePaise)}
-                      </strong>
-                    </div>
-                    <div>
-                      <span className="block text-xs text-slate-400">Total pieces</span>
-                      <strong className="font-semibold text-slate-900">
-                        {totalItemPieces}
-                      </strong>
-                    </div>
-                  </div>
-
-                  <div className="mt-5 flex flex-wrap items-center gap-3">
-                    <div className="inline-flex items-center overflow-hidden rounded-xl border border-slate-200 bg-white">
-                      <button
-                        type="button"
-                        onClick={() => decrementItem(cartKey)}
-                        aria-label={`Decrease ${item.variantSku}`}
-                        className="grid h-10 w-10 place-items-center text-lg text-slate-600 transition hover:bg-slate-50 hover:text-blue-700"
-                      >
-                        -
-                      </button>
-                      <input
-                        type="number"
-                        min={0}
-                        max={item.stock}
-                        value={item.quantity}
-                        onChange={(event) =>
-                          setItemQuantity(
-                            cartKey,
-                            Number.parseInt(event.target.value, 10),
-                          )
-                        }
-                        aria-label={`Packs for ${item.variantSku}`}
-                        className="h-10 w-16 border-x border-slate-200 text-center text-sm font-semibold text-slate-950 outline-none"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => incrementItem(cartKey)}
-                        aria-label={`Increase ${item.variantSku}`}
-                        className="grid h-10 w-10 place-items-center text-lg text-slate-600 transition hover:bg-slate-50 hover:text-blue-700"
-                      >
-                        +
-                      </button>
-                    </div>
-                    <span className="text-sm text-slate-500">
-                      {item.quantity} packs
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => removeItem(cartKey)}
-                      className="rounded-full border border-red-200 px-4 py-2 text-sm font-semibold text-red-600 transition hover:bg-red-50"
-                    >
-                      Remove
-                    </button>
-                  </div>
-                </div>
-              </article>
-            );
-          })}
-        </section>
-
-        <aside className="h-fit rounded-[24px] border border-slate-200 bg-white p-6 shadow-[0_18px_50px_rgba(15,23,42,0.08)] lg:sticky lg:top-28">
-          <h2 className="text-lg font-semibold tracking-[-0.02em]">
-            Summary
-          </h2>
-          <dl className="mt-5 space-y-3 text-sm">
-            <div className="flex justify-between gap-4">
-              <dt className="text-slate-500">Variants</dt>
-              <dd className="font-semibold text-slate-950">{items.length}</dd>
+                Clear cart
+              </button>
             </div>
-            <div className="flex justify-between gap-4">
-              <dt className="text-slate-500">Total packs</dt>
-              <dd className="font-semibold text-slate-950">{totalPacks}</dd>
+          </section>
+
+          <aside className="summary" aria-labelledby="cart-summary">
+            <h2 id="cart-summary" className="subsection">Summary</h2>
+            <dl className="mt-5 grid gap-3 text-sm">
+              <div className="flex justify-between gap-4"><dt className="text-ink-3">Subtotal</dt><dd className="figure">{formatPaise(subtotalPaise)}</dd></div>
+              <div className="flex justify-between gap-4"><dt className="text-ink-3">GST</dt><dd className="text-ink-2">Calculated at checkout</dd></div>
+              <div className="flex justify-between gap-4"><dt className="text-ink-3">Shipping</dt><dd className="text-ink-2">Calculated at checkout</dd></div>
+              <div className="mt-2 flex items-baseline justify-between gap-4 border-t border-line pt-4">
+                <dt className="font-medium text-ink">Total <span className="meta">excl. GST</span></dt>
+                <dd className="figure-lg">{formatPaise(subtotalPaise)}</dd>
+              </div>
+            </dl>
+            <div className="mt-6 grid gap-3">
+              <ProceedToCheckoutButton />
+              <Link href={quoteHref} className="btn btn-secondary btn-block">Request quote for this cart</Link>
             </div>
-            <div className="flex justify-between gap-4">
-              <dt className="text-slate-500">Total pieces</dt>
-              <dd className="font-semibold text-slate-950">{totalPieces}</dd>
-            </div>
-            <div className="flex justify-between gap-4 border-t border-slate-100 pt-4 text-base">
-              <dt className="font-semibold text-slate-700">Subtotal</dt>
-              <dd className="font-bold text-slate-950">
-                {formatPaise(subtotalPaise)}
-              </dd>
-            </div>
-          </dl>
-          <ProceedToCheckoutButton />
-          <button
-            type="button"
-            onClick={clearCart}
-            className="mt-3 w-full rounded-[14px] border border-slate-200 px-5 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
-          >
-            Clear cart
-          </button>
-        </aside>
+            <p className="mt-4 text-sm text-ink-3">Prices exclude GST. A GST invoice is issued with every order.</p>
+          </aside>
+        </div>
+      </div>
+
+      <div className="action-bar">
+        <span className="figure-lg">{formatPaise(subtotalPaise)}</span>
+        <ProceedToCheckoutButton className="btn btn-primary ml-auto" label="Checkout" />
       </div>
     </main>
   );

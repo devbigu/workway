@@ -185,7 +185,7 @@ describe("variant-aware cart store", () => {
     useCartStore.getState().addItem(secondVariant);
 
     const persistedValue = storage.setItem.mock.calls
-      .filter(([key]) => key === "workway-cart")
+      .filter(([key]) => key === "worklab-cart")
       .at(-1)?.[1];
 
     expect(persistedValue).toBeTruthy();
@@ -199,3 +199,33 @@ describe("variant-aware cart store", () => {
   });
 });
 
+
+describe("identity-scoped cart persistence", () => {
+  test("one customer's cart is never shown to another customer", async () => {
+    const { setCartIdentity, useCartStore } = await loadFreshStore();
+
+    useCartStore.getState().addItem(baseItem);
+    setCartIdentity("customer-a", "CUSTOMER", { mergeGuest: true });
+    useCartStore.getState().addItem(secondVariant);
+
+    setCartIdentity(null);
+    expect(useCartStore.getState().items).toEqual([]);
+
+    setCartIdentity("customer-b", "CUSTOMER");
+    expect(useCartStore.getState().items).toEqual([]);
+
+    setCartIdentity("customer-a", "CUSTOMER");
+    expect(useCartStore.getState().items.map((item) => item.variantSku))
+      .toEqual(["OM285-020", "OM285-045"]);
+  });
+
+  test("role is part of the persisted identity scope", async () => {
+    const { setCartIdentity, useCartStore } = await loadFreshStore();
+
+    setCartIdentity("shared-id", "CUSTOMER");
+    useCartStore.getState().addItem(baseItem);
+
+    setCartIdentity("shared-id", "ADMIN");
+    expect(useCartStore.getState().items).toEqual([]);
+  });
+});

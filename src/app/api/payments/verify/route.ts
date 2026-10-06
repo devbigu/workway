@@ -1,12 +1,11 @@
-import { headers } from "next/headers";
-import { NextResponse } from "next/server";
+﻿import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import {
   PaymentError,
   completeOrderPayment,
 } from "@/features/payments/server/payment.service";
-import { auth } from "@/lib/auth";
+import { requireCustomerApi } from "@/features/account/server/account.service";
 
 const requestSchema = z.object({
   orderId: z.string().min(1),
@@ -14,10 +13,9 @@ const requestSchema = z.object({
 });
 
 export async function POST(request: Request) {
-  const session = await auth.api.getSession({ headers: await headers() });
-  if (!session?.user) {
-    return NextResponse.json({ error: "Authentication required" }, { status: 401 });
-  }
+  const auth = await requireCustomerApi(request);
+  if (!auth) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+  if (!auth.customer) return NextResponse.json({ error: "Customer access required" }, { status: 403 });
 
   const parsed = requestSchema.safeParse(await request.json());
   if (!parsed.success) {
@@ -26,7 +24,7 @@ export async function POST(request: Request) {
 
   try {
     const order = await completeOrderPayment(
-      session.user.id,
+      auth.customer.id,
       parsed.data.orderId,
       parsed.data.paymentMethod,
     );
@@ -46,3 +44,4 @@ export async function POST(request: Request) {
     throw error;
   }
 }
+

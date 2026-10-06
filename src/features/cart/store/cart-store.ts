@@ -1,9 +1,10 @@
-"use client";
+﻿"use client";
 
 import { create } from "zustand";
 import {
   createJSONStorage,
   persist,
+  type StateStorage,
 } from "zustand/middleware";
 
 import type {
@@ -14,6 +15,24 @@ import type {
 
 type InternalCartState = CartState & {
   setHasHydrated: (hasHydrated: boolean) => void;
+};
+
+const GUEST_CART_STORAGE_KEY = "worklab-cart";
+// null = cart disabled (staff roles): nothing is read or persisted.
+let activeCartStorageKey: string | null = GUEST_CART_STORAGE_KEY;
+
+function getUserCartStorageKey(userId: string, role: string): string {
+  return `worklab-cart:${encodeURIComponent(role)}:${encodeURIComponent(userId)}`;
+}
+
+const scopedStorage: StateStorage = {
+  getItem: () => activeCartStorageKey && localStorage.getItem(activeCartStorageKey),
+  setItem: (_name, value) => {
+    if (activeCartStorageKey) localStorage.setItem(activeCartStorageKey, value);
+  },
+  removeItem: () => {
+    if (activeCartStorageKey) localStorage.removeItem(activeCartStorageKey);
+  },
 };
 
 export function createCartKey(
@@ -95,11 +114,12 @@ export const useCartStore = create<InternalCartState>()(
     (set, get) => ({
       items: [],
       hasHydrated: false,
+      cartEnabled: true,
       setHasHydrated: (hasHydrated) => set({ hasHydrated }),
       addItem: (item) => {
         const nextItem = toCartItem(item);
 
-        if (!nextItem) {
+        if (!nextItem || !get().cartEnabled) {
           return;
         }
 
@@ -190,8 +210,8 @@ export const useCartStore = create<InternalCartState>()(
       getTotalPieces: () => getTotalPieces(get().items),
     }),
     {
-      name: "workway-cart",
-      storage: createJSONStorage(() => localStorage),
+      name: GUEST_CART_STORAGE_KEY,
+      storage: createJSONStorage(() => scopedStorage),
       partialize: (state) => ({ items: state.items }),
       onRehydrateStorage: () => (state) => {
         state?.setHasHydrated(true);
@@ -200,29 +220,61 @@ export const useCartStore = create<InternalCartState>()(
   ),
 );
 
-export function mergeCartForUser(userId: string): CartItem[] {
-  if (typeof window === "undefined") return useCartStore.getState().items;
-
-  const storageKey = `workway-user-cart:${userId}`;
-  let savedItems: CartItem[] = [];
-
+function readStoredItems(storageKey: string): CartItem[] {
   try {
-    savedItems = JSON.parse(localStorage.getItem(storageKey) ?? "[]") as CartItem[];
+    const value = JSON.parse(localStorage.getItem(storageKey) ?? "null") as
+      | { state?: { items?: CartItem[] } }
+      | null;
+    return Array.isArray(value?.state?.items) ? value.state.items : [];
   } catch {
-    savedItems = [];
+    return [];
   }
+}
 
+function mergeItems(...groups: CartItem[][]): CartItem[] {
   const merged = new Map<string, CartItem>();
-  for (const item of [...savedItems, ...useCartStore.getState().items]) {
+  for (const item of groups.flat()) {
     const key = getCartItemKey(item);
     const existing = merged.get(key);
     merged.set(key, existing
       ? { ...existing, ...item, quantity: Math.max(existing.quantity, item.quantity) }
       : item);
   }
+  return Array.from(merged.values());
+}
 
-  const items = Array.from(merged.values());
-  useCartStore.setState({ items });
-  localStorage.setItem(storageKey, JSON.stringify(items));
+export function setCartIdentity(
+  userId: string | null,
+  role = "CUSTOMER",
+  options: { mergeGuest?: boolean } = {},
+): CartItem[] {
+  if (typeof localStorage === "undefined") return useCartStore.getState().items;
+  const userKey = userId ? getUserCartStorageKey(userId, role) : null;
+  const canShop = !userId || role === "CUSTOMER";
+  // Staff roles get no cart: drop any old one, never merge the guest cart into it.
+  if (userKey && !canShop) localStorage.removeItem(userKey);
+  const nextStorageKey = !userKey ? GUEST_CART_STORAGE_KEY : canShop ? userKey : null;
+  const shouldMergeGuest = Boolean(userKey && canShop && options.mergeGuest);
+  const guestItems = shouldMergeGuest ? readStoredItems(GUEST_CART_STORAGE_KEY) : [];
+
+  if (activeCartStorageKey === nextStorageKey && !shouldMergeGuest) {
+    useCartStore.setState({ hasHydrated: true });
+    return useCartStore.getState().items;
+  }
+
+  const items = nextStorageKey
+    ? mergeItems(readStoredItems(nextStorageKey), guestItems)
+    : [];
+  activeCartStorageKey = nextStorageKey;
+  useCartStore.setState({ items, hasHydrated: true, cartEnabled: canShop });
+  if (shouldMergeGuest) localStorage.removeItem(GUEST_CART_STORAGE_KEY);
   return items;
+}
+
+export function mergeCartForUser(userId: string, role = "CUSTOMER"): CartItem[] {
+  return setCartIdentity(userId, role, { mergeGuest: true });
+}
+
+export function isolateGuestCart(): CartItem[] {
+  return setCartIdentity(null);
 }

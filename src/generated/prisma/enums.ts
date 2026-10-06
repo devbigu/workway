@@ -85,3 +85,35 @@ export const FulfillmentStatus = {
 } as const
 
 export type FulfillmentStatus = (typeof FulfillmentStatus)[keyof typeof FulfillmentStatus]
+
+
+export const AddressType = {
+  HOME: 'HOME',
+  WORK: 'WORK',
+  OTHER: 'OTHER'
+} as const
+
+export type AddressType = (typeof AddressType)[keyof typeof AddressType]
+
+
+export const SupportCategory = {
+  ORDER: 'ORDER',
+  REFUND: 'REFUND',
+  DELIVERY: 'DELIVERY',
+  PAYMENT: 'PAYMENT',
+  PRODUCT: 'PRODUCT',
+  ACCOUNT: 'ACCOUNT',
+  OTHER: 'OTHER'
+} as const
+
+export type SupportCategory = (typeof SupportCategory)[keyof typeof SupportCategory]
+
+
+export const SupportStatus = {
+  OPEN: 'OPEN',
+  IN_PROGRESS: 'IN_PROGRESS',
+  RESOLVED: 'RESOLVED',
+  CLOSED: 'CLOSED'
+} as const
+
+export type SupportStatus = (typeof SupportStatus)[keyof typeof SupportStatus]

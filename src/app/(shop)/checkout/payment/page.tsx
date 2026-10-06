@@ -4,9 +4,13 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
+import { EmptyState } from "@/components/shared/empty-state";
+import { Breadcrumbs } from "@/components/shared/page-header";
 import {
   CHECKOUT_REDIRECT_KEY,
 } from "@/features/auth/redirect";
+import { CheckoutSkeleton, CheckoutSteps } from "@/features/checkout/components/checkout-form";
+import { Icon } from "@/features/home/components/icon";
 import { useCartStore } from "@/features/cart/store/cart-store";
 import { authClient } from "@/lib/auth-client";
 
@@ -48,7 +52,7 @@ export default function PaymentPage() {
 
     let paymentSummary: PaymentSummary | null = null;
     try {
-      const value = sessionStorage.getItem("workway-payment-summary");
+      const value = sessionStorage.getItem("worklab-payment-summary");
       paymentSummary = value ? JSON.parse(value) as PaymentSummary : null;
     } catch {
       paymentSummary = null;
@@ -83,8 +87,8 @@ export default function PaymentPage() {
         throw new Error(result.error ?? "Unable to confirm your order");
       }
 
-      sessionStorage.removeItem("workway-payment-summary");
-      sessionStorage.removeItem("workway-checkout-idempotency");
+      sessionStorage.removeItem("worklab-payment-summary");
+      sessionStorage.removeItem("worklab-checkout-idempotency");
       clearCart();
       router.replace(`/order-confirmation/${result.order.orderNumber}`);
     } catch (error) {
@@ -96,46 +100,59 @@ export default function PaymentPage() {
   }
 
   if (isPending || !session?.user || !hydrated) {
-    return <main className="min-h-screen animate-pulse bg-[#f6f9fd] p-8" />;
+    return <CheckoutSkeleton />;
   }
 
   if (!summary || !items.length) {
     return (
-      <main className="grid min-h-[70vh] place-items-center bg-[#f6f9fd] px-4">
-        <div className="rounded-3xl border border-slate-200 bg-white p-8 text-center">
-          <h1 className="text-2xl font-semibold">Payment session unavailable</h1>
-          <p className="mt-3 text-sm text-slate-500">Review checkout details again to continue.</p>
-          <Link href="/checkout" className="mt-6 inline-flex rounded-full bg-blue-600 px-6 py-3 text-sm font-semibold text-white">Return to checkout</Link>
-        </div>
+      <main className="page-wrap">
+        <EmptyState
+          title="This payment session has ended."
+          text="Review your checkout details again to continue."
+          action={<Link href="/checkout" className="btn btn-primary">Return to checkout</Link>}
+        />
       </main>
     );
   }
 
+  const online = summary.payment === "online";
+
   return (
-    <main className="min-h-screen bg-[#f6f9fd] px-4 py-10 text-slate-950">
-      <div className="mx-auto max-w-2xl">
-        <Link href="/checkout" className="text-sm font-semibold text-blue-600">← Back to checkout</Link>
-        <section className="mt-5 overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-[0_20px_60px_rgba(15,23,42,0.09)]">
-          <div className="border-b border-slate-100 p-7">
-            <p className="text-xs font-bold uppercase tracking-[0.16em] text-blue-600">Final step</p>
-            <h1 className="mt-2 text-3xl font-semibold tracking-[-0.04em]">
-              {summary.payment === "online" ? "Secure payment" : "Confirm pay on delivery"}
-            </h1>
-            <p className="mt-3 text-sm text-slate-500">{items.length} product variants in this order</p>
+    <main className="page-wrap pb-16">
+      <div className="mx-auto max-w-[40rem]">
+        <header className="border-b border-line pb-6 pt-8 lg:pt-12">
+          <Breadcrumbs items={[{ label: "Cart", href: "/cart" }, { label: "Checkout", href: "/checkout" }, { label: "Payment" }]} />
+          <h1 className="page-title mt-4">{online ? "Payment" : "Confirm your order"}</h1>
+          <div className="mt-6"><CheckoutSteps current={3} /></div>
+        </header>
+
+        <section className="mt-8 lg:mt-12" aria-labelledby="payment-summary">
+          <div className="flex items-baseline justify-between gap-4">
+            <h2 id="payment-summary" className="subsection">Order {summary.orderNumber}</h2>
+            <p className="meta">{items.length} {items.length === 1 ? "line" : "lines"}</p>
           </div>
-          <dl className="space-y-3 p-7 text-sm">
-            <div className="flex justify-between"><dt className="text-slate-500">Products</dt><dd>{formatPrice(summary.subtotal)}</dd></div>
-            <div className="flex justify-between"><dt className="text-slate-500">GST</dt><dd>{formatPrice(summary.tax)}</dd></div>
-            <div className="flex justify-between"><dt className="text-slate-500">Delivery</dt><dd>{summary.delivery ? formatPrice(summary.delivery) : "Free"}</dd></div>
-            {summary.discount > 0 && <div className="flex justify-between text-emerald-600"><dt>Discount</dt><dd>-{formatPrice(summary.discount)}</dd></div>}
-            <div className="flex justify-between border-t border-slate-200 pt-4 text-lg font-bold"><dt>Total</dt><dd>{formatPrice(summary.total)}</dd></div>
+          <dl className="mt-4 grid gap-3 border-t border-line pt-4 text-sm">
+            <div className="flex justify-between"><dt className="text-ink-3">Products</dt><dd className="figure">{formatPrice(summary.subtotal)}</dd></div>
+            <div className="flex justify-between"><dt className="text-ink-3">GST</dt><dd className="figure">{formatPrice(summary.tax)}</dd></div>
+            <div className="flex justify-between"><dt className="text-ink-3">Delivery</dt><dd className="figure">{summary.delivery ? formatPrice(summary.delivery) : "Free"}</dd></div>
+            {summary.discount > 0 && <div className="flex justify-between"><dt className="text-ink-3">Discount</dt><dd className="figure text-success">−{formatPrice(summary.discount)}</dd></div>}
+            <div className="mt-2 flex items-baseline justify-between border-t border-line pt-4"><dt className="font-medium text-ink">Total</dt><dd className="figure-lg">{formatPrice(summary.total)}</dd></div>
           </dl>
-          <div className="border-t border-slate-100 bg-slate-50 p-7">
-            {paymentError && <p role="alert" className="mb-3 rounded-xl bg-red-50 p-3 text-sm text-red-700">{paymentError}</p>}
-            <button onClick={completePayment} disabled={processing} className="h-13 w-full rounded-[14px] bg-blue-600 px-5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-70">
-              {processing ? "Confirming order…" : summary.payment === "online" ? `Pay ${formatPrice(summary.total)}` : "Place order"}
-            </button>
-            <p className="mt-3 text-center text-xs text-slate-400">Your session and order details are checked before confirmation.</p>
+
+          {paymentError && (
+            <div role="alert" className="alert alert-error mt-6">
+              <Icon name="alert" />
+              <p>{paymentError}</p>
+            </div>
+          )}
+
+          <button type="button" onClick={completePayment} disabled={processing} aria-busy={processing} className="btn btn-primary btn-lg btn-block mt-6">
+            {processing && <span className="spinner" aria-hidden="true" />}
+            {online ? `Pay ${formatPrice(summary.total)}` : "Place order"}
+          </button>
+          <div className="mt-3 flex items-center justify-between gap-4">
+            <Link href="/checkout" className="btn btn-text text-sm">Back to checkout</Link>
+            <p className="text-sm text-ink-3">Your session and order are checked before confirmation.</p>
           </div>
         </section>
       </div>

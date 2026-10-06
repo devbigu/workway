@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import {
   useEffect,
   useMemo,
@@ -12,8 +11,14 @@ import {
   useSearchParams,
 } from "next/navigation";
 
+import { CopyButton } from "@/components/shared/copy-button";
+import { EmptyState } from "@/components/shared/empty-state";
+import { Breadcrumbs } from "@/components/shared/page-header";
 import AddToCartButton from "@/features/cart/components/add-to-cart-button";
+import { Icon } from "@/features/home/components/icon";
 import ProductCard from "@/features/products/components/product-card";
+import ProductGalleryPremium from "@/features/products/components/product-gallery-premium";
+import ProductContent from "@/features/products/components/product-content";
 import {
   createCartKey,
   useCartStore,
@@ -35,7 +40,6 @@ import {
   PRODUCT_PLACEHOLDER_IMAGE,
 } from "@/features/products/utils";
 
-
 type LoadStatus =
   | "loading"
   | "success"
@@ -55,6 +59,10 @@ function getRelatedProducts(
     .slice(0, 4);
 }
 
+function formatPerUnit(price: number): string {
+  return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(price);
+}
+
 function QuantitySelector({
   quantity,
   onChange,
@@ -63,46 +71,22 @@ function QuantitySelector({
   onChange: (quantity: number) => void;
 }) {
   return (
-    <div className="inline-flex items-center overflow-hidden rounded-xl border border-slate-200 bg-white">
-      <button
-        type="button"
-        onClick={() =>
-          onChange(Math.max(1, quantity - 1))
-        }
-        aria-label="Decrease quantity"
-        className="grid h-11 w-11 place-items-center text-lg text-slate-600 transition hover:bg-slate-50 hover:text-blue-700"
-      >
-        âˆ’
+    <div className="qty" role="group" aria-label="Number of packs">
+      <button type="button" onClick={() => onChange(Math.max(1, quantity - 1))} disabled={quantity <= 1} aria-label="Decrease quantity">
+        &minus;
       </button>
-
       <input
-        type="number"
-        min={1}
+        type="text"
+        inputMode="numeric"
+        pattern="[0-9]*"
         value={quantity}
         onChange={(event) => {
-          const nextQuantity = Number.parseInt(
-            event.target.value,
-            10,
-          );
-
-          onChange(
-            Number.isFinite(nextQuantity)
-              ? Math.max(1, nextQuantity)
-              : 1,
-          );
+          const nextQuantity = Number.parseInt(event.target.value, 10);
+          onChange(Number.isFinite(nextQuantity) ? Math.max(1, nextQuantity) : 1);
         }}
         aria-label="Quantity"
-        className="h-11 w-14 border-x border-slate-200 bg-white text-center text-sm font-semibold text-slate-950 outline-none"
       />
-
-      <button
-        type="button"
-        onClick={() => onChange(quantity + 1)}
-        aria-label="Increase quantity"
-        className="grid h-11 w-11 place-items-center text-lg text-slate-600 transition hover:bg-slate-50 hover:text-blue-700"
-      >
-        +
-      </button>
+      <button type="button" onClick={() => onChange(quantity + 1)} aria-label="Increase quantity">+</button>
     </div>
   );
 }
@@ -187,7 +171,6 @@ export default function ProductDetailsPage() {
       controller.abort();
     };
   }, [slug]);
-
 
   const selectedVariant = useMemo(() => {
     if (!product) {
@@ -302,6 +285,9 @@ export default function ProductDetailsPage() {
       productId: product.id,
       src: getVariantImage(product, variant),
     });
+
+    // Keep the selected variant shareable without a navigation.
+    window.history.replaceState(null, "", `?variant=${encodeURIComponent(variant.id)}`);
   }
 
   function handleQuantityChange(nextQuantity: number) {
@@ -320,33 +306,28 @@ export default function ProductDetailsPage() {
     const targetProduct = products.find(
       (item) => item.id === productId,
     );
+    const variant = targetProduct?.variants.find((item) => item.id === variantId);
 
     if (!targetProduct) {
       return;
     }
 
-    const query = new URLSearchParams({
-      product: targetProduct.name,
-      variant: variantId,
-    });
-
-    window.location.href =
-      `/contact?${query.toString()}`;
+    window.location.href = `/contact?${new URLSearchParams({ sku: variant?.sku ?? targetProduct.sku, product: targetProduct.name })}`;
   }
 
   if (loadStatus === "loading") {
     return (
-      <main className="min-h-screen bg-[#f8fbff] px-4 py-16">
-        <div className="mx-auto max-w-[1360px]">
-          <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_340px]">
-            <div className="aspect-square animate-pulse rounded-[28px] bg-slate-200" />
-            <div className="space-y-4">
-              <div className="h-6 w-32 animate-pulse rounded bg-slate-200" />
-              <div className="h-10 w-4/5 animate-pulse rounded bg-slate-200" />
-              <div className="h-5 w-full animate-pulse rounded bg-slate-200" />
-              <div className="h-5 w-3/4 animate-pulse rounded bg-slate-200" />
-            </div>
-            <div className="h-96 animate-pulse rounded-[24px] bg-slate-200" />
+      <main className="page-wrap pb-16" aria-busy="true">
+        <div className="skeleton mt-8 h-3 w-48" />
+        <div className="mt-6 grid gap-10 lg:grid-cols-[7fr_5fr] lg:gap-16">
+          <div className="skeleton aspect-square rounded-md" />
+          <div className="grid content-start gap-4">
+            <div className="skeleton h-3 w-32" />
+            <div className="skeleton h-12 w-4/5" />
+            <div className="skeleton h-4 w-full" />
+            <div className="skeleton mt-6 h-11 w-2/3" />
+            <div className="skeleton mt-6 h-8 w-40" />
+            <div className="skeleton mt-6 h-13 w-full" />
           </div>
         </div>
       </main>
@@ -355,28 +336,13 @@ export default function ProductDetailsPage() {
 
   if (loadStatus === "error") {
     return (
-      <main className="grid min-h-[70vh] place-items-center bg-[#f8fbff] px-4">
-        <div className="max-w-md rounded-[24px] border border-red-200 bg-white p-8 text-center">
-          <h1 className="text-xl font-semibold text-slate-950">
-            Product could not be loaded
-          </h1>
-
-          <p className="mt-3 text-sm leading-6 text-slate-500">
-            Confirm that the product JSON exists
-            inside{" "}
-            <code className="rounded bg-slate-100 px-1.5 py-1">
-              public/data
-            </code>
-            .
-          </p>
-
-          <Link
-            href="/products"
-            className="mt-6 inline-flex rounded-full bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white"
-          >
-            Back to products
-          </Link>
-        </div>
+      <main className="page-wrap">
+        <EmptyState
+          icon="alert"
+          title="This product could not be loaded."
+          text="The catalogue data did not load. Check your connection and try again."
+          action={<Link href="/products" className="btn btn-primary">Back to products</Link>}
+        />
       </main>
     );
   }
@@ -386,540 +352,179 @@ export default function ProductDetailsPage() {
     !product
   ) {
     return (
-      <main className="grid min-h-[70vh] place-items-center bg-[#f8fbff] px-4">
-        <div className="max-w-md rounded-[24px] border border-slate-200 bg-white p-8 text-center">
-          <h1 className="text-xl font-semibold text-slate-950">
-            Product not found
-          </h1>
-
-          <p className="mt-3 text-sm text-slate-500">
-            No product matched{" "}
-            <strong>{slug}</strong>.
-          </p>
-
-          <Link
-            href="/products"
-            className="mt-6 inline-flex rounded-full bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white"
-          >
-            Browse all products
-          </Link>
-        </div>
+      <main className="page-wrap">
+        <EmptyState
+          title={<>No product matches <em>‘{slug}’</em></>}
+          text="It may have been renamed or removed from the catalogue."
+          action={<Link href="/products" className="btn btn-primary">Browse all products</Link>}
+        />
       </main>
     );
   }
 
+  const lead = product.features.find((feature) => feature.trim());
+  const sku = selectedVariant?.sku ?? product.sku;
+  const quoteHref = `/contact?${new URLSearchParams({ sku, qty: String(displayedQuantity) })}`;
+  const priceText = packPrice !== null
+    ? formatProductPrice(packPrice)
+    : formatProductPrice(null, selectedVariant?.priceLabel);
+  const buyButton = selectedCartQuantity > 0 ? (
+    <Link href="/cart" className="btn btn-secondary btn-lg flex-1">In cart · View cart</Link>
+  ) : (
+    <AddToCartButton
+      item={selectedCartInput}
+      disabled={!canAddToCart}
+      ariaLabel={`Add ${product.name} ${selectedVariant?.sku ?? "selected variant"} to cart`}
+      className="btn btn-primary btn-lg flex-1"
+    >
+      Add to cart
+    </AddToCartButton>
+  );
+
   return (
-    <main className="min-h-screen bg-[#f8fbff] text-slate-950">
-      <div className="border-b border-slate-200 bg-white">
-        <nav
-          aria-label="Breadcrumb"
-          className="mx-auto flex max-w-[1360px] flex-wrap items-center gap-2 px-4 py-4 text-sm text-slate-500 sm:px-6 lg:px-8"
-        >
-          <Link
-            href="/"
-            className="transition hover:text-blue-700"
-          >
-            Home
-          </Link>
+    <main>
+      <div className="page-wrap pb-16">
+        <div className="pt-6 lg:pt-8">
+          <Breadcrumbs items={[{ label: "Home", href: "/" }, { label: "Products", href: "/products" }, { label: product.category, href: `/products?category=${encodeURIComponent(product.category)}` }, { label: product.name }]} />
+        </div>
 
-          <span aria-hidden="true">/</span>
-
-          <Link
-            href="/products"
-            className="transition hover:text-blue-700"
-          >
-            Products
-          </Link>
-
-          <span aria-hidden="true">/</span>
-
-          <span className="font-medium text-slate-900">
-            {product.name}
-          </span>
-        </nav>
-      </div>
-
-      <section className="mx-auto max-w-[1360px] px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
-        <div className="grid gap-8 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1fr)_340px] lg:items-start">
-          <div>
-            <div className="overflow-hidden rounded-[28px] border border-slate-200 bg-white p-6 shadow-[0_14px_40px_rgba(15,23,42,0.06)]">
-              <div className="relative aspect-square overflow-hidden rounded-[20px] bg-slate-50">
-                <Image
-                  src={selectedImage}
-                  alt={product.name}
-                  fill
-                  unoptimized
-                  sizes="(max-width: 1024px) 100vw, 430px"
-                  className="object-contain p-6"
-                  onError={() => {
-                    setSelectedImageOverride({
-                      productId: product.id,
-                      src: PRODUCT_PLACEHOLDER_IMAGE,
-                    });
-                  }}
-                />
-              </div>
-            </div>
-
-            {productImages.length > 1 && (
-              <div className="mt-4 flex gap-3 overflow-x-auto pb-2">
-                {productImages.map((image) => {
-                  const selected =
-                    image === selectedImage;
-
-                  return (
-                    <button
-                      key={image}
-                      type="button"
-                      onClick={() =>
-                        setSelectedImageOverride({
-                          productId: product.id,
-                          src: image,
-                        })
-                      }
-                      aria-label={`View image of ${product.name}`}
-                      className={[
-                        "h-20 w-20 shrink-0 overflow-hidden rounded-[14px] border bg-white p-2 transition",
-                        selected
-                          ? "border-blue-600 ring-2 ring-blue-100"
-                          : "border-slate-200 hover:border-blue-300",
-                      ].join(" ")}
-                    >
-                      <Image
-                        src={image}
-                        alt=""
-                        width={64}
-                        height={64}
-                        unoptimized
-                        className="h-full w-full object-contain"
-                      />
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </div>
+        <section className="mt-6 grid gap-10 lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)] lg:gap-16">
+          <ProductGalleryPremium
+            images={productImages}
+            activeImage={selectedImage}
+            productName={product.name}
+            onChange={(src) =>
+              setSelectedImageOverride({
+                productId: product.id,
+                src,
+              })
+            }
+          />
 
           <div>
-            <div className="flex flex-wrap gap-2">
-              <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
-                {product.category}
-              </span>
-
-              {selectedVariant?.inStock ? (
-                <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
-                  In stock
-                </span>
-              ) : (
-                <span className="rounded-full bg-red-50 px-3 py-1 text-xs font-semibold text-red-700">
-                  Out of stock
-                </span>
-              )}
+            <div className="flex items-center gap-1">
+              <span className="meta">Cat. No. <span className="text-ink-2">{sku}</span></span>
+              <CopyButton value={sku} label={`Copy catalogue number ${sku}`} />
             </div>
 
-            <p className="mt-5 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
-              Product code {product.sku}
-            </p>
+            <h1 className="page-title mt-2">{product.name}</h1>
 
-            <h1 className="mt-2 text-3xl font-semibold leading-tight tracking-[-0.04em] sm:text-4xl">
-              {product.name}
-            </h1>
+            {lead && <p className="mt-4 max-w-[60ch] text-ink-2">{lead}</p>}
 
-            {product.features.length > 0 && (
-              <div className="mt-7">
-                <h2 className="text-sm font-semibold text-slate-950">
-                  Product features
-                </h2>
-
-                <ul className="mt-4 space-y-3">
-                  {product.features.map(
-                    (feature, index) => (
-                      <li
-                        key={`${feature}-${index}`}
-                        className="flex gap-3 text-sm leading-6 text-slate-600"
-                      >
-                        <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-blue-600" />
-                        <span>{feature}</span>
-                      </li>
-                    ),
-                  )}
-                </ul>
-              </div>
-            )}
-
-            {product.variants.length > 0 && (
+            {product.variants.length > 1 && (
               <fieldset className="mt-8">
-                <legend className="text-sm font-semibold text-slate-950">
-                  Select variant
-                </legend>
-
+                <legend className="field-label">Variant</legend>
                 <div className="mt-3 flex flex-wrap gap-2">
-                  {product.variants.map(
-                    (variant) => {
-                      const selected =
-                        variant.id ===
-                        selectedVariant?.id;
-
-                      return (
-                        <button
-                          key={variant.id}
-                          type="button"
-                          disabled={
-                            !variant.inStock
-                          }
-                          aria-pressed={selected}
-                          onClick={() =>
-                            selectVariant(variant)
-                          }
-                          title={
-                            variant.specsText ||
-                            variant.sku
-                          }
-                          className={[
-                            "rounded-xl border px-3 py-2 text-xs font-semibold transition",
-                            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2",
-                            selected
-                              ? "border-blue-600 bg-blue-600 text-white"
-                              : "border-slate-200 bg-white text-slate-700 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700",
-                            !variant.inStock
-                              ? "cursor-not-allowed bg-slate-100 text-slate-400 opacity-50"
-                              : "",
-                          ].join(" ")}
-                        >
-                          {getVariantLabel(
-                            variant,
-                          )}
-                        </button>
-                      );
-                    },
-                  )}
+                  {product.variants.map((variant) => (
+                    <button
+                      key={variant.id}
+                      type="button"
+                      disabled={!variant.inStock}
+                      aria-pressed={variant.id === selectedVariant?.id}
+                      onClick={() => selectVariant(variant)}
+                      title={variant.specsText || variant.sku}
+                      className="option"
+                    >
+                      {getVariantLabel(variant)}
+                    </button>
+                  ))}
                 </div>
               </fieldset>
             )}
 
-            {selectedVariant && (
-              <div className="mt-8 overflow-hidden rounded-[20px] border border-slate-200 bg-white">
-                <div className="border-b border-slate-100 px-5 py-4">
-                  <h2 className="text-sm font-semibold text-slate-950">
-                    Selected specification
-                  </h2>
-                </div>
+            <div className="mt-8">
+              <p className="figure-lg">{priceText}</p>
+              {packPrice !== null && (
+                <p className="mt-2 text-sm text-ink-3">
+                  per pack of {packSize}
+                  {perUnitPrice !== null && <> · {formatPerUnit(perUnitPrice)} per unit</>}
+                  {" "}· excl. GST
+                </p>
+              )}
+            </div>
 
-                <dl className="divide-y divide-slate-100 px-5">
-                  <div className="flex justify-between gap-5 py-3 text-sm">
-                    <dt className="text-slate-500">
-                      Catalogue number
-                    </dt>
-
-                    <dd className="font-semibold text-slate-900">
-                      {selectedVariant.sku}
-                    </dd>
-                  </div>
-
-                  {Object.entries(
-                    selectedVariant.specs,
-                  ).map(([key, value]) => (
-                    <div
-                      key={key}
-                      className="flex justify-between gap-5 py-3 text-sm"
-                    >
-                      <dt className="text-slate-500">
-                        {key}
-                      </dt>
-
-                      <dd className="text-right font-semibold text-slate-900">
-                        {value}
-                      </dd>
-                    </div>
-                  ))}
-
-                  <div className="flex justify-between gap-5 py-3 text-sm">
-                    <dt className="text-slate-500">
-                      Pack quantity
-                    </dt>
-
-                    <dd className="font-semibold text-slate-900">
-                      {packSize} pieces
-                    </dd>
-                  </div>
-
-                  <div className="flex justify-between gap-5 py-3 text-sm">
-                    <dt className="text-slate-500">
-                      HSN code
-                    </dt>
-
-                    <dd className="font-semibold text-slate-900">
-                      {product.hsnCode ||
-                        "â€”"}
-                    </dd>
-                  </div>
-                </dl>
-              </div>
-            )}
-          </div>
-
-          <aside className="rounded-[24px] border border-slate-200 bg-white p-6 shadow-[0_18px_50px_rgba(15,23,42,0.08)] lg:sticky lg:top-28">
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
-              Selected variant
+            <p className="mt-4">
+              {selectedVariant?.inStock ? <span className="badge badge-success">In stock</span> : <span className="badge">Out of stock</span>}
             </p>
 
-            <p className="mt-2 text-sm font-semibold text-slate-900">
-              {selectedVariant?.sku ??
-                "No variant"}
-            </p>
-
-            <div className="mt-6">
+            <div className="mt-6 grid gap-3">
               {packPrice !== null ? (
                 <>
-                  <p className="text-3xl font-bold tracking-[-0.04em] text-slate-950">
-                    {formatProductPrice(packPrice)}
-                  </p>
-
-                  <div className="mt-2 flex flex-wrap items-center gap-2">
-                    <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">
-                      Pack of {packSize}
-                    </span>
-
-                    {perUnitPrice !== null && (
-                      <span className="text-xs text-slate-400">
-                        {formatProductPrice(
-                          perUnitPrice,
-                        )}
-                        /piece
-                      </span>
-                    )}
+                  <div className="flex flex-wrap items-start gap-3">
+                    <div className="grid gap-1">
+                      <QuantitySelector quantity={displayedQuantity} onChange={handleQuantityChange} />
+                      <span className="meta pl-4">packs of {packSize}</span>
+                    </div>
+                    {buyButton}
                   </div>
+                  {lineTotal !== null && (
+                    <p className="text-sm text-ink-3">Line total <span className="figure ml-1">{formatProductPrice(lineTotal)}</span></p>
+                  )}
                 </>
               ) : (
-                <p className="text-xl font-semibold text-slate-950">
-                  {selectedVariant
-                    ? formatProductPrice(
-                        selectedVariant.price,
-                        selectedVariant.priceLabel,
-                      )
-                    : "On Request"}
-                </p>
+                <button type="button" onClick={() => handleRequestPrice(product.id, selectedVariant?.id ?? "")} className="btn btn-primary btn-lg btn-block">
+                  Request price
+                </button>
               )}
+              <Link href={quoteHref} className="btn btn-secondary btn-block">Request bulk quote</Link>
             </div>
 
-            <div className="mt-6 rounded-[16px] bg-slate-50 p-4">
-              <div className="flex justify-between gap-4 text-sm">
-                <span className="text-slate-500">
-                  Availability
-                </span>
+            <p className="mt-6 flex items-center gap-2 text-sm text-ink-2">
+              <Icon name="truck" className="h-4 w-4 text-ink-3" />
+              Pan-India delivery · GST invoice with every order
+            </p>
+          </div>
+        </section>
+      </div>
 
-                <span
-                  className={
-                    selectedVariant?.inStock
-                      ? "font-semibold text-emerald-700"
-                      : "font-semibold text-red-700"
-                  }
-                >
-                  {selectedVariant?.inStock
-                    ? "In stock"
-                    : "Out of stock"}
-                </span>
-              </div>
+      <ProductContent product={product} variant={selectedVariant} />
 
-              <div className="mt-3 flex justify-between gap-4 text-sm">
-                <span className="text-slate-500">
-                  Pack size
-                </span>
-
-                <span className="font-semibold text-slate-900">
-                  {packSize} pieces
-                </span>
-              </div>
-            </div>
-
-            {packPrice !== null && (
-              <div className="mt-6">
-                <p className="mb-2 text-sm font-semibold text-slate-900">
-                  Number of packs
-                </p>
-
-                <QuantitySelector
-                  quantity={displayedQuantity}
-                  onChange={handleQuantityChange}
-                />
-              </div>
-            )}
-
-            {lineTotal !== null && (
-              <div className="mt-6 flex justify-between gap-4 border-t border-slate-100 pt-5">
-                <span className="text-sm text-slate-500">
-                  Total
-                </span>
-
-                <span className="text-lg font-bold text-slate-950">
-                  {formatProductPrice(lineTotal)}
-                </span>
-              </div>
-            )}
-
-            {packPrice !== null ? (
-              <AddToCartButton
-                item={selectedCartInput}
-                disabled={!canAddToCart}
-                ariaLabel={`Add ${product.name} ${selectedVariant?.sku ?? "selected variant"} to cart`}
-                className={[
-                  "mt-6 w-full rounded-[14px] px-5 py-3.5 text-sm font-semibold transition",
-                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2",
-                  canAddToCart
-                    ? "bg-blue-600 text-white shadow-[0_10px_25px_rgba(37,99,235,0.24)] hover:-translate-y-0.5 hover:bg-blue-700"
-                    : "cursor-not-allowed bg-slate-200 text-slate-400",
-                ].join(" ")}
-                counterClassName="mt-6 grid w-full grid-cols-[44px_minmax(0,1fr)_44px] overflow-hidden rounded-[14px] border border-blue-200 bg-blue-50 text-sm font-semibold text-blue-700"
-              >
-                Add to cart
-              </AddToCartButton>
-            ) : (
-              <button
-                type="button"
-                onClick={() =>
-                  handleRequestPrice(
-                    product.id,
-                    selectedVariant?.id ?? "",
-                  )
-                }
-                className="mt-6 w-full rounded-[14px] bg-blue-600 px-5 py-3.5 text-sm font-semibold text-white transition hover:bg-blue-700"
-              >
-                Request price
-              </button>
-            )}
-
-            {selectedVariant &&
-              product.variants.length > 1 && (
-                <p className="mt-4 text-center text-xs leading-5 text-slate-400">
-                  Prices and pack quantities may
-                  vary by selected specification.
-                </p>
-              )}
-          </aside>
-        </div>
-      </section>
-
-      {product.variants.length > 0 && (
-        <section className="border-t border-slate-200 bg-white">
-          <div className="mx-auto max-w-[1360px] px-4 py-12 sm:px-6 lg:px-8">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-600">
-                Catalogue data
-              </p>
-
-              <h2 className="mt-2 text-2xl font-semibold tracking-[-0.03em] text-slate-950">
-                Variants and specifications
-              </h2>
-            </div>
-
-            <div className="mt-7 overflow-x-auto rounded-[20px] border border-slate-200">
-              <table className="w-full min-w-[760px] border-collapse text-left text-sm">
-                <thead className="bg-slate-50">
+      {product.variants.length > 1 && (
+        <section className="border-t border-line py-16 lg:py-24" aria-labelledby="variants-title">
+          <div className="page-wrap">
+            <h2 id="variants-title" className="section-title">All variants</h2>
+            <p className="meta mt-3">{product.variants.length} catalogue numbers</p>
+            <div className="mt-8 overflow-x-auto">
+              <table className="table table-stack">
+                <thead>
                   <tr>
-                    <th className="px-5 py-4 font-semibold text-slate-700">
-                      Catalogue number
-                    </th>
-
-                    <th className="px-5 py-4 font-semibold text-slate-700">
-                      Specification
-                    </th>
-
-                    <th className="px-5 py-4 font-semibold text-slate-700">
-                      Pack
-                    </th>
-
-                    <th className="px-5 py-4 font-semibold text-slate-700">
-                      Price
-                    </th>
-
-                    <th className="px-5 py-4 font-semibold text-slate-700">
-                      Availability
-                    </th>
-
-                    <th className="px-5 py-4" />
+                    <th scope="col">Cat. No.</th>
+                    <th scope="col">Specification</th>
+                    <th scope="col" className="num">Pack</th>
+                    <th scope="col" className="num">Price</th>
+                    <th scope="col">Availability</th>
+                    <th scope="col"><span className="sr-only">Select</span></th>
                   </tr>
                 </thead>
+                <tbody>
+                  {product.variants.map((variant) => {
+                    const selected = selectedVariant?.id === variant.id;
 
-                <tbody className="divide-y divide-slate-100 bg-white">
-                  {product.variants.map(
-                    (variant) => {
-                      const selected =
-                        selectedVariant?.id ===
-                        variant.id;
-
-                      return (
-                        <tr
-                          key={variant.id}
-                          className={
-                            selected
-                              ? "bg-blue-50/60"
-                              : "transition hover:bg-slate-50"
-                          }
-                        >
-                          <td className="whitespace-nowrap px-5 py-4 font-semibold text-blue-700">
-                            {variant.sku}
-                          </td>
-
-                          <td className="px-5 py-4 text-slate-600">
-                            {variant.specsText ||
-                              getVariantLabel(
-                                variant,
-                              )}
-                          </td>
-
-                          <td className="whitespace-nowrap px-5 py-4 text-slate-600">
-                            {variant.pack} pieces
-                          </td>
-
-                          <td className="whitespace-nowrap px-5 py-4 font-semibold text-slate-900">
-                            {formatProductPrice(
-                              variant.price,
-                              variant.priceLabel,
-                            )}
-                          </td>
-
-                          <td className="whitespace-nowrap px-5 py-4">
-                            <span
-                              className={
-                                variant.inStock
-                                  ? "font-semibold text-emerald-700"
-                                  : "font-semibold text-red-700"
-                              }
-                            >
-                              {variant.inStock
-                                ? "In stock"
-                                : "Out of stock"}
-                            </span>
-                          </td>
-
-                          <td className="px-5 py-4 text-right">
-                            <button
-                              type="button"
-                              disabled={
-                                !variant.inStock
-                              }
-                              onClick={() => {
-                                selectVariant(
-                                  variant,
-                                );
-
-                                window.scrollTo({
-                                  top: 0,
-                                  behavior:
-                                    "smooth",
-                                });
-                              }}
-                              className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-700 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-40"
-                            >
-                              {selected
-                                ? "Selected"
-                                : "Select"}
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    },
-                  )}
+                    return (
+                      <tr key={variant.id} aria-selected={selected}>
+                        <td className="font-mono font-medium text-ink">{variant.sku}</td>
+                        <td data-label="Specification"><span>{variant.specsText || getVariantLabel(variant)}</span></td>
+                        <td className="num" data-label="Pack"><span>{variant.pack}</span></td>
+                        <td className="num" data-label="Price"><span>{formatProductPrice(variant.price, variant.priceLabel)}</span></td>
+                        <td data-label="Availability">
+                          <span>{variant.inStock ? <span className="badge badge-success">In stock</span> : <span className="badge">Out of stock</span>}</span>
+                        </td>
+                        <td data-label="">
+                          <button
+                            type="button"
+                            disabled={!variant.inStock || selected}
+                            onClick={() => {
+                              selectVariant(variant);
+                              window.scrollTo({ top: 0, behavior: "smooth" });
+                            }}
+                            className="btn btn-secondary btn-sm"
+                          >
+                            {selected ? "Selected" : "Select"}
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -928,60 +533,28 @@ export default function ProductDetailsPage() {
       )}
 
       {relatedProducts.length > 0 && (
-        <section className="bg-[#f8fbff]">
-          <div className="mx-auto max-w-[1360px] px-4 py-14 sm:px-6 lg:px-8">
-            <div className="flex items-end justify-between gap-5">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-600">
-                  More products
-                </p>
-
-                <h2 className="mt-2 text-2xl font-semibold tracking-[-0.03em] text-slate-950">
-                  Related products
-                </h2>
-              </div>
-
-              <Link
-                href="/products"
-                className="text-sm font-semibold text-blue-700 hover:text-blue-800"
-              >
-                View all
-              </Link>
+        <section className="border-t border-line py-16 lg:py-24" aria-labelledby="related-title">
+          <div className="page-wrap">
+            <div className="mb-10 flex items-end justify-between gap-5">
+              <h2 id="related-title" className="section-title">Related products</h2>
+              <Link href={`/products?category=${encodeURIComponent(product.category)}`} className="link link-arrow shrink-0 text-sm">View all</Link>
             </div>
-
-            <div className="mt-7 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-              {relatedProducts.map(
-                (relatedProduct) => (
-                  <ProductCard
-                    key={relatedProduct.id}
-                    product={relatedProduct}
-                    onRequestPrice={
-                      handleRequestPrice
-                    }
-                  />
-                ),
-              )}
+            <div className="grid grid-cols-2 gap-x-3 gap-y-6 md:gap-x-6 md:gap-y-8 lg:grid-cols-4">
+              {relatedProducts.map((relatedProduct) => (
+                <ProductCard key={relatedProduct.id} product={relatedProduct} onRequestPrice={handleRequestPrice} />
+              ))}
             </div>
           </div>
         </section>
       )}
+
+      <div className="action-bar">
+        <div className="min-w-0">
+          <p className="figure">{priceText}</p>
+          {packPrice !== null && <p className="meta">per pack of {packSize}</p>}
+        </div>
+        <div className="ml-auto flex">{packPrice !== null ? buyButton : null}</div>
+      </div>
     </main>
   );
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

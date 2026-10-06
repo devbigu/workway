@@ -1,18 +1,16 @@
-import { headers } from "next/headers";
-import { NextResponse } from "next/server";
+﻿import { NextResponse } from "next/server";
 
 import { createCheckoutSchema } from "@/features/checkout/schemas";
 import {
   CheckoutError,
   createCheckoutOrder,
 } from "@/features/checkout/server/checkout.service";
-import { auth } from "@/lib/auth";
+import { requireCustomerApi } from "@/features/account/server/account.service";
 
 export async function POST(request: Request) {
-  const session = await auth.api.getSession({ headers: await headers() });
-  if (!session?.user) {
-    return NextResponse.json({ error: "Authentication required" }, { status: 401 });
-  }
+  const auth = await requireCustomerApi(request);
+  if (!auth) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+  if (!auth.customer) return NextResponse.json({ error: "Customer access required" }, { status: 403 });
 
   const parsed = createCheckoutSchema.safeParse(await request.json());
   if (!parsed.success) {
@@ -23,7 +21,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const order = await createCheckoutOrder(session.user, parsed.data);
+    const order = await createCheckoutOrder(auth.customer, parsed.data);
     return NextResponse.json({
       order: {
         id: order.id,

@@ -1,9 +1,5 @@
-export default function Page() {
-  return (
-    <main className="p-6">
-      <h1 className="text-2xl font-semibold">
-        /account/orders
-      </h1>
-    </main>
-  );
+import { redirect } from "next/navigation";
+
+export default function OrdersPage() {
+  redirect("/account");
 }

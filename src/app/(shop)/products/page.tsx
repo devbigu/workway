@@ -1,9 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import type { Dispatch, ReactNode, SetStateAction } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
+import { EmptyState } from "@/components/shared/empty-state";
+import { Icon } from "@/features/home/components/icon";
 import ProductCard from "@/features/products/components/product-card";
 import { loadProducts } from "@/features/products/data";
 import type { Product } from "@/features/products/types";
@@ -23,6 +26,59 @@ type SortOption =
   | "price_desc";
 
 type PaginationItem = number | "ellipsis";
+type FilterGroupId =
+  | "categories"
+  | "availability"
+  | "price"
+  | "sizes"
+  | "print"
+  | "materials"
+  | "colours";
+
+type FilterOption = {
+  label: string;
+  count: number;
+};
+
+type PriceRange = {
+  id: string;
+  label: string;
+  min: number;
+  max: number;
+};
+
+const PRICE_RANGES: PriceRange[] = [
+  { id: "0-1000", label: "₹0 – ₹1,000", min: 0, max: 1000 },
+  { id: "1000-5000", label: "₹1,000 – ₹5,000", min: 1000, max: 5000 },
+  { id: "5000-10000", label: "₹5,000 – ₹10,000", min: 5000, max: 10000 },
+  { id: "10000-plus", label: "₹10,000+", min: 10000, max: Number.POSITIVE_INFINITY },
+];
+
+const SPEC_FILTER_PATTERNS: Record<
+  Extract<FilterGroupId, "sizes" | "print" | "materials" | "colours">,
+  RegExp[]
+> = {
+  sizes: [
+    /size/i,
+    /capacity/i,
+    /volume/i,
+    /diameter/i,
+    /\bdia\.?\b/i,
+    /dimension/i,
+    /length/i,
+    /height/i,
+    /width/i,
+  ],
+  print: [/print/i, /imprint/i, /graduation/i, /marking/i],
+  materials: [/material/i],
+  colours: [/colou?r/i, /color/i],
+};
+
+const FILTER_OPTION_LIMIT = 14;
+
+const GRID_CLASS = "grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-4 xl:grid-cols-4";
+const CHOICE_CLASS = "choice min-h-8 gap-2.5 text-[13px] text-ink-2 hover:text-ink";
+const CHECK_CLASS = "check size-4 rounded-[4px] checked:border-brand checked:bg-brand";
 
 function getProductCategories(product: Product): string[] {
   const values = new Set<string>();
@@ -109,44 +165,120 @@ function getPaginationItems(
   return items;
 }
 
-function LoadingGrid() {
-  return (
-    <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-      {Array.from({ length: 8 }, (_, index) => (
-        <div
-          key={index}
-          className="overflow-hidden rounded-[24px] border border-slate-200 bg-white p-3"
-        >
-          <div className="aspect-square animate-pulse rounded-[18px] bg-slate-100" />
+function normalizeFilterValue(value: string): string {
+  return value.replace(/\s+/g, " ").trim();
+}
 
-          <div className="space-y-3 px-1 pb-2 pt-5">
-            <div className="h-5 w-4/5 animate-pulse rounded bg-slate-100" />
-            <div className="h-4 w-2/5 animate-pulse rounded bg-slate-100" />
-            <div className="h-4 w-full animate-pulse rounded bg-slate-100" />
-            <div className="h-4 w-3/4 animate-pulse rounded bg-slate-100" />
-            <div className="h-10 animate-pulse rounded-xl bg-slate-100" />
-          </div>
-        </div>
-      ))}
-    </div>
+function getProductSpecValues(
+  product: Product,
+  groupId: Extract<FilterGroupId, "sizes" | "print" | "materials" | "colours">,
+): string[] {
+  const patterns = SPEC_FILTER_PATTERNS[groupId];
+  const values = new Set<string>();
+
+  product.variants.forEach((variant) => {
+    Object.entries(variant.specs).forEach(([key, value]) => {
+      if (!patterns.some((pattern) => pattern.test(key))) {
+        return;
+      }
+
+      const nextValue = normalizeFilterValue(value);
+
+      if (nextValue && nextValue.length <= 80) {
+        values.add(nextValue);
+      }
+    });
+  });
+
+  return Array.from(values);
+}
+
+function hasAnyValue(productValues: string[], selectedValues: string[]): boolean {
+  return selectedValues.some((selectedValue) =>
+    productValues.includes(selectedValue),
   );
 }
 
+function buildFilterOptions(
+  products: Product[],
+  getValues: (product: Product) => string[],
+  limit = FILTER_OPTION_LIMIT,
+): FilterOption[] {
+  const counts = new Map<string, number>();
+
+  products.forEach((product) => {
+    new Set(getValues(product)).forEach((value) => {
+      counts.set(value, (counts.get(value) ?? 0) + 1);
+    });
+  });
+
+  return Array.from(counts.entries())
+    .map(([label, count]) => ({ label, count }))
+    .sort((first, second) => {
+      if (second.count !== first.count) {
+        return second.count - first.count;
+      }
+
+      return first.label.localeCompare(second.label);
+    })
+    .slice(0, limit);
+}
+
+function getProductPrice(product: Product): number | null {
+  return getLowestPricedVariant(product)?.price ?? null;
+}
+
+function isInPriceRange(product: Product, rangeId: string): boolean {
+  const range = PRICE_RANGES.find((candidate) => candidate.id === rangeId);
+  const price = getProductPrice(product);
+
+  return !range || (price !== null && price >= range.min && price < range.max);
+}
+
 export default function ProductsPage() {
+  const searchParams = useSearchParams();
+  const initialSearchQuery = searchParams.get("q") ?? "";
+  const initialSelectedCategories = searchParams
+    .getAll("category")
+    .filter(Boolean);
+
+  return (
+    <ProductsCatalogue
+      key={searchParams.toString()}
+      initialSearchQuery={initialSearchQuery}
+      initialSelectedCategories={initialSelectedCategories}
+    />
+  );
+}
+
+function ProductsCatalogue({
+  initialSearchQuery,
+  initialSelectedCategories,
+}: {
+  initialSearchQuery: string;
+  initialSelectedCategories: string[];
+}) {
   const router = useRouter();
 
   const [products, setProducts] = useState<Product[]>([]);
   const [loadStatus, setLoadStatus] =
     useState<LoadStatus>("loading");
 
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchQuery, setSearchQuery] = useState(initialSearchQuery);
   const [sortBy, setSortBy] =
     useState<SortOption>("default");
   const [selectedCategories, setSelectedCategories] =
+    useState<string[]>(initialSelectedCategories);
+  const [priceRange, setPriceRange] = useState("");
+  const [selectedSizes, setSelectedSizes] = useState<string[]>([]);
+  const [selectedPrints, setSelectedPrints] = useState<string[]>([]);
+  const [selectedMaterials, setSelectedMaterials] =
     useState<string[]>([]);
+  const [selectedColours, setSelectedColours] = useState<string[]>([]);
   const [inStockOnly, setInStockOnly] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
-  const [categoriesOpen, setCategoriesOpen] = useState(true);
+  const [view, setView] = useState<"grid" | "list">("grid");
+  const drawerRef = useRef<HTMLDialogElement>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -172,28 +304,42 @@ export default function ProductsPage() {
     };
   }, []);
 
-  const categoryOptions = useMemo(() => {
-    const counts = new Map<string, number>();
+  const categoryOptions = useMemo(
+    () => buildFilterOptions(products, getProductCategories, 30),
+    [products],
+  );
 
-    products.forEach((product) => {
-      const productCategories = new Set(
-        getProductCategories(product),
-      );
+  const sizeOptions = useMemo(
+    () =>
+      buildFilterOptions(products, (product) =>
+        getProductSpecValues(product, "sizes"),
+      ),
+    [products],
+  );
 
-      productCategories.forEach((category) => {
-        counts.set(category, (counts.get(category) ?? 0) + 1);
-      });
-    });
+  const printOptions = useMemo(
+    () =>
+      buildFilterOptions(products, (product) =>
+        getProductSpecValues(product, "print"),
+      ),
+    [products],
+  );
 
-    return Array.from(counts.entries())
-      .map(([label, count]) => ({
-        label,
-        count,
-      }))
-      .sort((first, second) =>
-        first.label.localeCompare(second.label),
-      );
-  }, [products]);
+  const materialOptions = useMemo(
+    () =>
+      buildFilterOptions(products, (product) =>
+        getProductSpecValues(product, "materials"),
+      ),
+    [products],
+  );
+
+  const colourOptions = useMemo(
+    () =>
+      buildFilterOptions(products, (product) =>
+        getProductSpecValues(product, "colours"),
+      ),
+    [products],
+  );
 
   const filteredProducts = useMemo(() => {
     const nextProducts = products.filter((product) => {
@@ -211,18 +357,55 @@ export default function ProductsPage() {
         }
       }
 
-      if (selectedCategories.length > 0) {
-        const productCategories =
-          getProductCategories(product);
+      if (
+        selectedCategories.length > 0 &&
+        !hasAnyValue(getProductCategories(product), selectedCategories)
+      ) {
+        return false;
+      }
 
-        const matchesSelectedCategory =
-          selectedCategories.some((selectedCategory) =>
-            productCategories.includes(selectedCategory),
-          );
+      if (!isInPriceRange(product, priceRange)) {
+        return false;
+      }
 
-        if (!matchesSelectedCategory) {
-          return false;
-        }
+      if (
+        selectedSizes.length > 0 &&
+        !hasAnyValue(
+          getProductSpecValues(product, "sizes"),
+          selectedSizes,
+        )
+      ) {
+        return false;
+      }
+
+      if (
+        selectedPrints.length > 0 &&
+        !hasAnyValue(
+          getProductSpecValues(product, "print"),
+          selectedPrints,
+        )
+      ) {
+        return false;
+      }
+
+      if (
+        selectedMaterials.length > 0 &&
+        !hasAnyValue(
+          getProductSpecValues(product, "materials"),
+          selectedMaterials,
+        )
+      ) {
+        return false;
+      }
+
+      if (
+        selectedColours.length > 0 &&
+        !hasAnyValue(
+          getProductSpecValues(product, "colours"),
+          selectedColours,
+        )
+      ) {
+        return false;
       }
 
       return true;
@@ -266,6 +449,11 @@ export default function ProductsPage() {
     searchQuery,
     inStockOnly,
     selectedCategories,
+    priceRange,
+    selectedSizes,
+    selectedPrints,
+    selectedMaterials,
+    selectedColours,
     sortBy,
   ]);
 
@@ -293,16 +481,22 @@ export default function ProductsPage() {
   );
 
   const activeFilterCount =
-    selectedCategories.length + (inStockOnly ? 1 : 0);
+    selectedCategories.length +
+    (priceRange ? 1 : 0) +
+    selectedSizes.length +
+    selectedPrints.length +
+    selectedMaterials.length +
+    selectedColours.length +
+    (inStockOnly ? 1 : 0);
 
-  function toggleCategory(category: string) {
-    setSelectedCategories((currentCategories) =>
-      currentCategories.includes(category)
-        ? currentCategories.filter(
-            (currentCategory) =>
-              currentCategory !== category,
-          )
-        : [...currentCategories, category],
+  function toggleFilterValue(
+    value: string,
+    setSelectedValues: Dispatch<SetStateAction<string[]>>,
+  ) {
+    setSelectedValues((currentValues) =>
+      currentValues.includes(value)
+        ? currentValues.filter((currentValue) => currentValue !== value)
+        : [...currentValues, value],
     );
 
     setCurrentPage(1);
@@ -311,6 +505,11 @@ export default function ProductsPage() {
   function clearFilters() {
     setSearchQuery("");
     setSelectedCategories([]);
+    setPriceRange("");
+    setSelectedSizes([]);
+    setSelectedPrints([]);
+    setSelectedMaterials([]);
+    setSelectedColours([]);
     setInStockOnly(false);
     setSortBy("default");
     setCurrentPage(1);
@@ -350,381 +549,287 @@ export default function ProductsPage() {
     );
   }
 
+  function renderFilterOptions(
+    options: FilterOption[],
+    selectedValues: string[],
+    setSelectedValues: Dispatch<SetStateAction<string[]>>,
+    emptyLabel: string,
+  ) {
+    if (options.length === 0) {
+      return <p className="pb-4 text-xs text-ink-3">{emptyLabel}</p>;
+    }
+
+    return (
+      <div className="pb-3">
+        {options.map((option) => {
+          const value = option.label;
+
+          return (
+            <label key={value} className={CHOICE_CLASS}>
+              <input
+                type="checkbox"
+                className={CHECK_CLASS}
+                checked={selectedValues.includes(value)}
+                onChange={() => toggleFilterValue(value, setSelectedValues)}
+              />
+              <span className="min-w-0 flex-1 truncate" title={option.label}>{option.label}</span>
+              <span className="text-xs tabular-nums text-ink-3">{option.count}</span>
+            </label>
+          );
+        })}
+      </div>
+    );
+  }
+
+  function renderFilterSection(
+    groupId: FilterGroupId,
+    title: string,
+    content: ReactNode,
+  ) {
+    return (
+      <details key={groupId} className="group border-b border-line" open={groupId === "categories" || groupId === "price"}>
+        <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between text-sm font-semibold text-ink [&::-webkit-details-marker]:hidden">
+          {title}
+          <Icon name="chevron" className="h-4 w-4 rotate-90 text-ink-3 transition-transform group-open:-rotate-90" />
+        </summary>
+        {content}
+      </details>
+    );
+  }
+
+  function renderFilters(scope: string) {
+    return (
+      <>
+        {renderFilterSection("categories", "Categories", renderFilterOptions(categoryOptions, selectedCategories, setSelectedCategories, "No categories found."))}
+        {renderFilterSection(
+          "price",
+          "Price Range",
+          <div className="pb-3">
+            {[{ id: "", label: "All" }, ...PRICE_RANGES].map((range) => (
+              <label key={range.id} className={CHOICE_CLASS}>
+                <input
+                  type="radio"
+                  name={`${scope}-price`}
+                  className="radio size-4 checked:border-[5px] checked:border-brand"
+                  checked={priceRange === range.id}
+                  onChange={() => {
+                    setPriceRange(range.id);
+                    setCurrentPage(1);
+                  }}
+                />
+                {range.label}
+              </label>
+            ))}
+          </div>,
+        )}
+        {renderFilterSection("sizes", "Size", renderFilterOptions(sizeOptions, selectedSizes, setSelectedSizes, "No size specifications found."))}
+        {renderFilterSection("materials", "Material", renderFilterOptions(materialOptions, selectedMaterials, setSelectedMaterials, "No material specifications found."))}
+        {renderFilterSection("colours", "Colour", renderFilterOptions(colourOptions, selectedColours, setSelectedColours, "No colour specifications found."))}
+        {renderFilterSection("print", "Print", renderFilterOptions(printOptions, selectedPrints, setSelectedPrints, "No print specifications found."))}
+        {renderFilterSection(
+          "availability",
+          "Availability",
+          <div className="pb-3">
+            <label className={CHOICE_CLASS}>
+              <input
+                type="checkbox"
+                className={CHECK_CLASS}
+                checked={inStockOnly}
+                onChange={() => {
+                  setInStockOnly((current) => !current);
+                  setCurrentPage(1);
+                }}
+              />
+              In stock only
+            </label>
+          </div>,
+        )}
+      </>
+    );
+  }
+
+  const titleCategory = !initialSearchQuery && initialSelectedCategories.length === 1 ? initialSelectedCategories[0] : null;
+  const count = filteredProducts.length.toLocaleString("en-IN");
+
   return (
-    <main className="min-h-screen bg-[#f8fbff] text-slate-900">
-      <section className="border-b border-slate-200 bg-white">
-        <div className="mx-auto max-w-[1440px] px-4 py-8 sm:px-6 lg:px-8">
-          <nav
-            aria-label="Breadcrumb"
-            className="flex flex-wrap items-center gap-2 text-sm text-slate-500"
-          >
-            <Link
-              href="/"
-              className="transition hover:text-blue-700"
-            >
-              Home
-            </Link>
-
-            <span aria-hidden="true">/</span>
-
-            <span className="font-medium text-slate-900">
-              Products
-            </span>
-          </nav>
-
-          <div className="mt-5 flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-            <div>
-              <p className="text-xs font-bold uppercase tracking-[0.2em] text-blue-600">
-                Scientific catalogue
-              </p>
-
-              <h1 className="mt-2 text-3xl font-semibold tracking-[-0.04em] text-slate-950 sm:text-4xl">
-                All products
-              </h1>
-
-              <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600 sm:text-base">
-                Browse laboratory equipment, consumables,
-                filters, glassware and scientific products.
-              </p>
-            </div>
-
-            {loadStatus === "success" && (
-              <p className="text-sm text-slate-500">
-                <strong className="font-semibold text-slate-900">
-                  {filteredProducts.length.toLocaleString(
-                    "en-IN",
-                  )}
-                </strong>{" "}
-                products found
-              </p>
-            )}
-          </div>
+    <main className="pb-16">
+      <section className="bg-linear-to-r from-surface-alt to-surface-alt/30">
+        <div className="page-wrap py-12 lg:py-16">
+          <h1 className="page-title">{initialSearchQuery ? <em>“{initialSearchQuery}”</em> : titleCategory ?? "All Products"}</h1>
+          {!initialSearchQuery && (
+            <p className="mt-5 max-w-[34rem] text-ink-2">
+              Laboratory glassware, filtration, plasticware, instruments and consumables. Search by name, catalogue number or specification.
+            </p>
+          )}
         </div>
       </section>
 
-      <div className="mx-auto grid max-w-[1440px] gap-8 px-4 py-8 sm:px-6 lg:grid-cols-[250px_minmax(0,1fr)] lg:px-8 lg:py-10">
-        <aside className="self-start lg:sticky lg:top-28">
-          <div className="rounded-[22px] border border-slate-200 bg-white p-5 shadow-[0_10px_35px_rgba(15,23,42,0.05)]">
-            <div className="border-b border-slate-100 pb-5">
-              <div className="flex items-center justify-between">
-                <h2 className="text-sm font-semibold text-slate-950">
-                  Filters
-                </h2>
+      <div className="page-wrap mt-6 grid gap-6 lg:mt-8 lg:grid-cols-[260px_minmax(0,1fr)] lg:gap-x-8">
+        <div className="flex flex-col gap-3 sm:flex-row lg:col-start-2">
+          <button type="button" onClick={() => drawerRef.current?.showModal()} className="btn btn-secondary lg:hidden">
+            <Icon name="filter" className="h-4 w-4" />
+            Filters{activeFilterCount > 0 ? ` (${activeFilterCount})` : ""}
+          </button>
+          <label className="relative min-w-0 flex-1">
+            <span className="sr-only">Search products</span>
+            <Icon name="search" className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-3" />
+            <input
+              type="search"
+              value={searchQuery}
+              placeholder="Search product name, catalogue number or specification…"
+              onChange={(event) => {
+                setSearchQuery(event.target.value);
+                setCurrentPage(1);
+              }}
+              className="input rounded-full border-line bg-surface pl-11 text-sm"
+            />
+          </label>
+          <label>
+            <span className="sr-only">Sort products</span>
+            <select
+              value={sortBy}
+              onChange={(event) => {
+                setSortBy(event.target.value as SortOption);
+                setCurrentPage(1);
+              }}
+              className="select rounded-full border-line text-sm font-medium sm:w-48"
+            >
+              <option value="default">Relevance</option>
+              <option value="price_asc">Price, low to high</option>
+              <option value="price_desc">Price, high to low</option>
+              <option value="name_asc">Name, A to Z</option>
+              <option value="name_desc">Name, Z to A</option>
+            </select>
+          </label>
+        </div>
 
-                {activeFilterCount > 0 && (
-                  <span className="rounded-full bg-blue-100 px-2.5 py-1 text-xs font-semibold text-blue-700">
-                    {activeFilterCount}
-                  </span>
-                )}
-              </div>
-
-              <label className="mt-5 flex cursor-pointer items-center gap-3">
-                <input
-                  type="checkbox"
-                  checked={inStockOnly}
-                  onChange={() => {
-                    setInStockOnly((current) => !current);
-                    setCurrentPage(1);
-                  }}
-                  className="h-4 w-4 rounded border-slate-300 accent-blue-600"
-                />
-
-                <span className="text-sm text-slate-700">
-                  In-stock products only
-                </span>
-              </label>
-            </div>
-
-            <div className="pt-5">
-              <button
-                type="button"
-                onClick={() =>
-                  setCategoriesOpen((current) => !current)
-                }
-                aria-expanded={categoriesOpen}
-                className="flex w-full items-center justify-between text-left"
-              >
-                <span className="text-sm font-semibold text-slate-950">
-                  Categories
-                </span>
-
-                <span
-                  aria-hidden="true"
-                  className="text-lg text-slate-400"
-                >
-                  {categoriesOpen ? "−" : "+"}
-                </span>
-              </button>
-
-              {categoriesOpen && (
-                <div className="mt-4 max-h-[420px] space-y-1 overflow-y-auto pr-1">
-                  {categoryOptions.map(
-                    ({ label, count }) => {
-                      const checked =
-                        selectedCategories.includes(label);
-
-                      return (
-                        <label
-                          key={label}
-                          className="flex cursor-pointer items-center gap-3 rounded-xl px-2 py-2 transition hover:bg-slate-50"
-                        >
-                          <input
-                            type="checkbox"
-                            checked={checked}
-                            onChange={() =>
-                              toggleCategory(label)
-                            }
-                            className="h-4 w-4 shrink-0 rounded border-slate-300 accent-blue-600"
-                          />
-
-                          <span
-                            className={[
-                              "min-w-0 flex-1 text-sm",
-                              checked
-                                ? "font-semibold text-blue-700"
-                                : "text-slate-600",
-                            ].join(" ")}
-                          >
-                            {label}
-                          </span>
-
-                          <span className="text-xs text-slate-400">
-                            {count}
-                          </span>
-                        </label>
-                      );
-                    },
-                  )}
-                </div>
-              )}
-            </div>
-
-            {activeFilterCount > 0 && (
-              <button
-                type="button"
-                onClick={clearFilters}
-                className="mt-5 w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700"
-              >
-                Clear filters
-              </button>
-            )}
-          </div>
+        <aside className="card hidden self-start p-5 lg:sticky lg:top-[92px] lg:block lg:max-h-[calc(100dvh-116px)] lg:overflow-y-auto" aria-label="Filters">
+          <p className="flex items-center gap-2.5 border-b border-line pb-4 text-sm font-semibold">
+            <Icon name="filter" className="h-4 w-4" />
+            Filters
+          </p>
+          {renderFilters("sidebar")}
+          <button type="button" onClick={clearFilters} className="mt-4 text-xs text-ink-3 hover:text-ink">Clear all filters</button>
         </aside>
 
-        <section className="min-w-0">
-          <div className="mb-6 flex flex-col gap-3 rounded-[20px] border border-slate-200 bg-white p-3 shadow-[0_8px_30px_rgba(15,23,42,0.04)] sm:flex-row">
-            <label className="relative min-w-0 flex-1">
-              <span className="sr-only">
-                Search products
-              </span>
-
-              <svg
-                aria-hidden="true"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.8"
-                className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400"
-              >
-                <circle cx="11" cy="11" r="7" />
-                <path d="m20 20-4-4" />
-              </svg>
-
-              <input
-                type="search"
-                value={searchQuery}
-                placeholder="Search by name, catalogue number or specification"
-                onChange={(event) => {
-                  setSearchQuery(event.target.value);
-                  setCurrentPage(1);
-                }}
-                className="h-12 w-full rounded-[14px] border border-slate-200 bg-slate-50 pl-12 pr-4 text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100"
-              />
-            </label>
-
-            <label>
-              <span className="sr-only">
-                Sort products
-              </span>
-
-              <select
-                value={sortBy}
-                onChange={(event) => {
-                  setSortBy(
-                    event.target.value as SortOption,
-                  );
-                  setCurrentPage(1);
-                }}
-                className="h-12 w-full rounded-[14px] border border-slate-200 bg-white px-4 text-sm text-slate-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100 sm:w-56"
-              >
-                <option value="default">
-                  Default sorting
-                </option>
-                <option value="name_asc">
-                  Name: A to Z
-                </option>
-                <option value="name_desc">
-                  Name: Z to A
-                </option>
-                <option value="price_asc">
-                  Price: Low to High
-                </option>
-                <option value="price_desc">
-                  Price: High to Low
-                </option>
-              </select>
-            </label>
+        <dialog
+          ref={drawerRef}
+          aria-label="Filters"
+          className="drawer drawer-left"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) drawerRef.current?.close();
+          }}
+        >
+          <div className="flex items-center justify-between border-b border-line px-4 py-2">
+            <h2 className="subsection">Filters</h2>
+            <button type="button" onClick={() => drawerRef.current?.close()} aria-label="Close filters" className="btn btn-icon"><Icon name="x" /></button>
           </div>
+          <div className="overflow-y-auto px-4">{renderFilters("drawer")}</div>
+          <div className="flex items-center justify-between gap-3 border-t border-line px-4 py-3">
+            <button type="button" onClick={clearFilters} className="btn btn-text text-sm">Clear all</button>
+            <button type="button" onClick={() => drawerRef.current?.close()} className="btn btn-brand">Show {count} results</button>
+          </div>
+        </dialog>
 
+        <section className="min-w-0" aria-label="Products">
           {loadStatus === "loading" && <LoadingGrid />}
 
           {loadStatus === "error" && (
-            <div className="rounded-[24px] border border-red-200 bg-red-50 px-6 py-16 text-center">
-              <h2 className="text-lg font-semibold text-red-900">
-                Products could not be loaded
-              </h2>
-
-              <p className="mt-2 text-sm text-red-700">
-                Confirm that the JSON file exists at
-                public/data/omsons_products_from_excel_with_images.json.
-              </p>
+            <div role="alert" className="alert alert-error">
+              <Icon name="alert" />
+              <div>
+                <p className="font-medium">The catalogue could not be loaded.</p>
+                <p className="mt-1 text-ink-2">Check your connection and reload the page.</p>
+              </div>
             </div>
           )}
 
-          {loadStatus === "success" &&
-            filteredProducts.length === 0 && (
-              <div className="rounded-[24px] border border-slate-200 bg-white px-6 py-16 text-center">
-                <div className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-slate-100 text-slate-500">
-                  <svg
-                    aria-hidden="true"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.8"
-                    className="h-6 w-6"
-                  >
-                    <circle cx="11" cy="11" r="7" />
-                    <path d="m20 20-4-4" />
-                  </svg>
-                </div>
+          {loadStatus === "success" && filteredProducts.length === 0 && (
+            <EmptyState
+              icon="search"
+              title={searchQuery.trim() ? <>No matches for <em>‘{searchQuery.trim()}’</em></> : "No products match these filters."}
+              text="Check the spelling, try a catalogue number, or remove a filter."
+              action={
+                <>
+                  <button type="button" onClick={clearFilters} className="btn btn-primary">Clear all filters</button>
+                  <Link href={`/contact?product=${encodeURIComponent(searchQuery.trim())}`} className="btn btn-text">Request this product</Link>
+                </>
+              }
+            />
+          )}
 
-                <h2 className="mt-5 text-lg font-semibold text-slate-950">
-                  No products found
-                </h2>
-
-                <p className="mt-2 text-sm text-slate-500">
-                  Change the search term or remove some
-                  filters.
+          {loadStatus === "success" && displayedProducts.length > 0 && (
+            <>
+              <div className="flex items-center justify-between gap-4">
+                <p className="text-sm text-ink-3">
+                  Showing {pageStart + 1}–{Math.min(pageStart + PAGE_SIZE, filteredProducts.length)} of {count} products
                 </p>
-
-                <button
-                  type="button"
-                  onClick={clearFilters}
-                  className="mt-6 rounded-full bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700"
-                >
-                  Clear all filters
-                </button>
-              </div>
-            )}
-
-          {loadStatus === "success" &&
-            displayedProducts.length > 0 && (
-              <>
-                <div className="mb-5 flex items-center justify-between gap-4">
-                  <p className="text-sm text-slate-500">
-                    Showing{" "}
-                    <strong className="font-semibold text-slate-900">
-                      {pageStart + 1}–
-                      {Math.min(
-                        pageStart + PAGE_SIZE,
-                        filteredProducts.length,
-                      )}
-                    </strong>{" "}
-                    of{" "}
-                    <strong className="font-semibold text-slate-900">
-                      {filteredProducts.length}
-                    </strong>
-                  </p>
-                </div>
-
-                <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-                  {displayedProducts.map((product) => (
-                    <ProductCard
-                      key={product.id}
-                      product={product}
-                      onRequestPrice={handleRequestPrice}
-                    />
+                <div role="group" aria-label="Layout" className="flex gap-0.5 rounded-sm border border-line bg-surface p-0.5">
+                  {(["grid", "list"] as const).map((option) => (
+                    <button
+                      key={option}
+                      type="button"
+                      onClick={() => setView(option)}
+                      aria-pressed={view === option}
+                      aria-label={option === "grid" ? "Grid view" : "List view"}
+                      className="grid size-8 place-items-center rounded-xs text-ink-3 hover:text-ink aria-pressed:bg-surface-alt aria-pressed:text-ink"
+                    >
+                      <Icon name={option === "grid" ? "grid" : "menu"} className="h-4 w-4" />
+                    </button>
                   ))}
                 </div>
+              </div>
 
-                {totalPages > 1 && (
-                  <nav
-                    aria-label="Product pagination"
-                    className="mt-12 flex flex-wrap items-center justify-center gap-2"
-                  >
-                    <button
-                      type="button"
-                      disabled={safeCurrentPage === 1}
-                      onClick={() =>
-                        goToPage(safeCurrentPage - 1)
-                      }
-                      className="h-10 rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:border-blue-300 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-40"
-                    >
-                      Previous
-                    </button>
+              <div className={view === "list" ? "pgrid-list mt-4 grid gap-3" : `mt-4 ${GRID_CLASS}`}>
+                {displayedProducts.map((product) => (
+                  <ProductCard key={product.id} product={product} onRequestPrice={handleRequestPrice} />
+                ))}
+              </div>
 
-                    {paginationItems.map((item, index) =>
-                      item === "ellipsis" ? (
-                        <span
-                          key={`ellipsis-${index}`}
-                          className="grid h-10 w-10 place-items-center text-slate-400"
-                        >
-                          …
-                        </span>
-                      ) : (
-                        <button
-                          key={item}
-                          type="button"
-                          onClick={() => goToPage(item)}
-                          aria-current={
-                            item === safeCurrentPage
-                              ? "page"
-                              : undefined
-                          }
-                          className={[
-                            "grid h-10 min-w-10 place-items-center rounded-xl border px-3 text-sm font-semibold transition",
-                            item === safeCurrentPage
-                              ? "border-blue-600 bg-blue-600 text-white"
-                              : "border-slate-200 bg-white text-slate-700 hover:border-blue-300 hover:text-blue-700",
-                          ].join(" ")}
-                        >
-                          {item}
-                        </button>
-                      ),
-                    )}
-
-                    <button
-                      type="button"
-                      disabled={
-                        safeCurrentPage === totalPages
-                      }
-                      onClick={() =>
-                        goToPage(safeCurrentPage + 1)
-                      }
-                      className="h-10 rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:border-blue-300 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-40"
-                    >
-                      Next
-                    </button>
-                  </nav>
-                )}
-              </>
-            )}
+              {totalPages > 1 && (
+                <nav aria-label="Product pagination" className="pager mt-10 justify-center [&_[aria-current=page]]:bg-brand">
+                  <button type="button" disabled={safeCurrentPage === 1} onClick={() => goToPage(safeCurrentPage - 1)} aria-label="Previous page">
+                    <Icon name="chevron" className="h-4 w-4 rotate-180" />
+                  </button>
+                  {paginationItems.map((item, index) =>
+                    item === "ellipsis" ? (
+                      <span key={`ellipsis-${index}`} aria-hidden="true">…</span>
+                    ) : (
+                      <button
+                        key={item}
+                        type="button"
+                        onClick={() => goToPage(item)}
+                        aria-current={item === safeCurrentPage ? "page" : undefined}
+                        aria-label={`Page ${item}`}
+                      >
+                        {item}
+                      </button>
+                    ),
+                  )}
+                  <button type="button" disabled={safeCurrentPage === totalPages} onClick={() => goToPage(safeCurrentPage + 1)} aria-label="Next page">
+                    <Icon name="chevron" className="h-4 w-4" />
+                  </button>
+                </nav>
+              )}
+            </>
+          )}
         </section>
       </div>
     </main>
   );
 }
 
-
-
-
+function LoadingGrid() {
+  return (
+    <div className={`mt-12 ${GRID_CLASS}`} aria-busy="true">
+      {Array.from({ length: 8 }, (_, index) => (
+        <div key={index} className="card grid gap-3 p-2 pb-3">
+          <div className="skeleton aspect-[1.1] rounded-sm" />
+          <div className="skeleton h-3 w-1/3" />
+          <div className="skeleton h-4 w-4/5" />
+          <div className="skeleton h-4 w-2/5" />
+        </div>
+      ))}
+    </div>
+  );
+}

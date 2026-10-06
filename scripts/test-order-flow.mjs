@@ -28,8 +28,8 @@ registerHooks({
 
 process.loadEnvFile(".env.test.local");
 const databaseUrl = new URL(process.env.DATABASE_URL);
-if (databaseUrl.pathname !== "/workway_test") {
-  throw new Error("Refusing to run order flow outside workway_test");
+if (databaseUrl.pathname !== "/worklab_test") {
+  throw new Error("Refusing to run order flow outside worklab_test");
 }
 
 const cleanup = new Client({ connectionString: databaseUrl.toString() });
@@ -121,7 +121,7 @@ const checkoutInput = {
   },
   delivery: "priority",
   payment: "online",
-  voucher: "WORKWAY5",
+  voucher: "worklab5",
   idempotencyKey: `sandbox-order-${Date.now()}`,
 };
 
@@ -163,7 +163,7 @@ if (userOrderCount !== 1) {
 }
 
 console.log(JSON.stringify({
-  database: "workway_test",
+  database: "worklab_test",
   authentication: "passed",
   order: {
     id: persisted.id,

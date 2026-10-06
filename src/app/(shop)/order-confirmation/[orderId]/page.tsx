@@ -2,6 +2,9 @@ import Link from "next/link";
 import { headers } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 
+import { CopyButton } from "@/components/shared/copy-button";
+import { formatDate } from "@/features/account/presentation";
+import { Icon } from "@/features/home/components/icon";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 
@@ -34,27 +37,49 @@ export default async function OrderConfirmationPage({
 
   if (!order) notFound();
 
-  const itemCount = order.sellerOrders.reduce(
-    (count, sellerOrder) =>
-      count + sellerOrder.items.reduce((total, item) => total + item.quantity, 0),
-    0,
-  );
+  const items = order.sellerOrders.flatMap((sellerOrder) => sellerOrder.items);
+  const paid = order.paymentStatus === "PAID";
 
   return (
-    <main className="grid min-h-[75vh] place-items-center bg-[#f6f9fd] px-4 py-12 text-slate-950">
-      <section className="w-full max-w-xl rounded-[30px] border border-slate-200 bg-white p-8 text-center shadow-[0_24px_70px_rgba(15,23,42,0.1)] sm:p-12">
-        <span className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-emerald-100 text-2xl text-emerald-700">&#10003;</span>
-        <p className="mt-6 text-xs font-bold uppercase tracking-[0.16em] text-emerald-700">Order confirmed</p>
-        <h1 className="mt-2 text-3xl font-semibold tracking-[-0.04em]">Thank you for your order</h1>
-        <p className="mt-4 text-sm leading-6 text-slate-500">We received {itemCount} pack{itemCount === 1 ? "" : "s"} and will send delivery updates to {session.user.email}.</p>
-        <dl className="mt-7 space-y-3 rounded-2xl bg-slate-50 p-4 text-sm">
-          <div><dt className="text-xs uppercase tracking-[0.12em] text-slate-400">Order number</dt><dd className="mt-1 text-lg font-bold">{order.orderNumber}</dd></div>
-          <div className="flex justify-between border-t border-slate-200 pt-3"><dt className="text-slate-500">Payment</dt><dd className="font-semibold">{order.paymentStatus === "PAID" ? "Paid" : "Pay on delivery"}</dd></div>
-          <div className="flex justify-between"><dt className="text-slate-500">Total</dt><dd className="font-semibold">{formatPrice(order.totalPaise)}</dd></div>
-        </dl>
-        <div className="mt-7 flex flex-col justify-center gap-3 sm:flex-row">
-          <Link href="/account/orders" className="rounded-full bg-blue-600 px-6 py-3 text-sm font-semibold text-white">View orders</Link>
-          <Link href="/products" className="rounded-full border border-slate-200 px-6 py-3 text-sm font-semibold text-slate-700">Continue shopping</Link>
+    <main className="page-wrap pb-16">
+      <section className="mx-auto max-w-[40rem] pt-12 text-center lg:pt-16">
+        <Icon name="flask" className="mx-auto h-14 w-14 text-ink" strokeWidth={1} />
+        <h1 className="page-title mt-6">Thank you. <em>Order received.</em></h1>
+        <div className="mt-6 flex items-center justify-center gap-1">
+          <span className="figure-lg">{order.orderNumber}</span>
+          <CopyButton value={order.orderNumber} label={`Copy order number ${order.orderNumber}`} />
+        </div>
+        <p className="mt-4 flex flex-wrap items-center justify-center gap-3">
+          <span className="meta">Placed {formatDate(order.placedAt ?? order.createdAt)}</span>
+          <span className={paid ? "badge badge-success" : "badge"}>{paid ? "Paid" : "Pay on delivery"}</span>
+        </p>
+        <p className="mt-4 text-ink-2">A confirmation and delivery updates will go to {session.user.email}.</p>
+      </section>
+
+      <section className="mx-auto mt-12 max-w-[40rem]" aria-labelledby="items-title">
+        <h2 id="items-title" className="subsection">Items</h2>
+        <table className="table table-stack mt-4">
+          <thead>
+            <tr><th scope="col">Product</th><th scope="col" className="num">Packs</th><th scope="col" className="num">Total</th></tr>
+          </thead>
+          <tbody>
+            {items.map((item) => (
+              <tr key={item.id}>
+                <td><span className="block text-ink">{item.productName}</span><span className="meta">{item.sku}</span></td>
+                <td className="num" data-label="Packs"><span>{item.quantity}</span></td>
+                <td className="num" data-label="Total"><span>{formatPrice(item.totalPaise)}</span></td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr><td colSpan={2}>Order total</td><td className="num" data-label="">{formatPrice(order.totalPaise)}</td></tr>
+          </tfoot>
+        </table>
+
+        <div className="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row">
+          <Link href={`/account/orders/${order.id}`} className="btn btn-primary">View order</Link>
+          {paid && <a href={`/api/account/orders/${order.id}/invoice`} className="btn btn-secondary">Download invoice</a>}
+          <Link href="/products" className="link link-arrow text-sm sm:ml-3">Continue shopping</Link>
         </div>
       </section>
     </main>

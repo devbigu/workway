@@ -20,6 +20,8 @@ export type AddCartItemInput = Omit<CartItem, "quantity"> & {
 export type CartState = {
   items: CartItem[];
   hasHydrated: boolean;
+  /** False for staff/admin sessions: they cannot hold a cart or order. */
+  cartEnabled: boolean;
   addItem: (item: AddCartItemInput) => void;
   removeItem: (cartKey: string) => void;
   incrementItem: (cartKey: string) => void;

@@ -1,0 +1,10 @@
+import { SupportForm } from "@/features/account/components/support-form";
+import { formatDate, labelStatus, statusTone } from "@/features/account/presentation";
+import { listSupportOrderOptions, listSupportRequests, requireCustomerPage } from "@/features/account/server/account.service";
+
+export default async function SupportPage({ searchParams }: { searchParams: Promise<{ order?: string | string[] }> }) {
+  const customer = await requireCustomerPage();
+  const [requests, orders] = await Promise.all([listSupportRequests(customer.id), listSupportOrderOptions(customer.id)]);
+  const rawOrder = (await searchParams).order;
+  return <section><p className="text-xs font-bold uppercase tracking-[0.16em] text-blue-700">We’re here to help</p><h2 className="mt-1 text-2xl font-black tracking-tight sm:text-3xl">Customer Support</h2><p className="mt-2 text-sm text-slate-500">Get help with orders, delivery, payments, refunds, or products.</p><div className="mt-6"><SupportForm orders={orders} selectedOrder={typeof rawOrder==="string"?rawOrder:undefined}/></div><section className="mt-6"><h3 className="text-lg font-black">Previous requests</h3>{requests.length?<div className="mt-4 space-y-3">{requests.map(request=><article key={request.id} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-wide text-slate-400">{labelStatus(request.category)}{request.order ? " · Order #" + request.order.orderNumber : ""}</p><h4 className="mt-1 font-black">{request.subject}</h4></div><span className={"rounded-full px-2.5 py-1 text-xs font-bold ring-1 ring-inset "+statusTone(request.status)}>{labelStatus(request.status)}</span></div><p className="mt-3 line-clamp-3 text-sm leading-6 text-slate-600">{request.message}</p><p className="mt-3 text-xs text-slate-400">Created {formatDate(request.createdAt,true)}</p></article>)}</div>:<div className="mt-4 rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center text-sm text-slate-500">You haven’t contacted support yet.</div>}</section></section>;
+}

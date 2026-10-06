@@ -8,7 +8,7 @@ import {
 } from "@/features/auth/redirect";
 import { authClient } from "@/lib/auth-client";
 
-export function ProceedToCheckoutButton() {
+export function ProceedToCheckoutButton({ className = "btn btn-primary btn-lg btn-block", label = "Proceed to checkout" }: { className?: string; label?: string }) {
   const router = useRouter();
   const [checking, setChecking] = useState(false);
 
@@ -26,13 +26,9 @@ export function ProceedToCheckoutButton() {
   }
 
   return (
-    <button
-      type="button"
-      onClick={proceed}
-      disabled={checking}
-      className="mt-6 flex w-full justify-center rounded-[14px] bg-blue-600 px-5 py-3.5 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-wait disabled:opacity-70"
-    >
-      {checking ? "Checking your account?" : "Proceed to checkout"}
+    <button type="button" onClick={proceed} disabled={checking} aria-busy={checking} className={className}>
+      {checking && <span className="spinner" aria-hidden="true" />}
+      {label}
     </button>
   );
 }

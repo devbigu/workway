@@ -32,8 +32,8 @@ for (const key of required) {
 }
 
 const databaseUrl = new URL(process.env.DATABASE_URL);
-if (databaseUrl.pathname !== "/workway_test") {
-  throw new Error("Refusing to run auth test outside workway_test");
+if (databaseUrl.pathname !== "/worklab_test") {
+  throw new Error("Refusing to run auth test outside worklab_test");
 }
 
 const cleanup = new Client({ connectionString: databaseUrl.toString() });

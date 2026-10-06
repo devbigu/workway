@@ -49,10 +49,13 @@ export async function createCheckoutOrder(
     (total, item) => total + item.subtotalPaise,
     0,
   );
-  const discountPaise =
-    input.voucher.toUpperCase() === "WORKWAY5"
-      ? Math.min(Math.round(subtotalPaise * 0.05), 50_000)
-      : 0;
+  const voucher = input.voucher.toUpperCase();
+  if (voucher && voucher !== "worklab5") {
+    throw new CheckoutError("The voucher is no longer valid");
+  }
+  const discountPaise = voucher === "worklab5"
+    ? Math.min(Math.round(subtotalPaise * 0.05), 50_000)
+    : 0;
   const taxPaise = Math.round(subtotalPaise * 0.18);
   const shippingPaise = input.delivery === "priority" ? 29_900 : 0;
   const totalPaise =
@@ -60,7 +63,27 @@ export async function createCheckoutOrder(
   const orderNumber = `WW-${Date.now().toString(36).toUpperCase()}-${randomBytes(3).toString("hex").toUpperCase()}`;
 
   return db.$transaction(async (transaction) => {
-    return transaction.order.create({
+    const address = await transaction.address.findUnique({
+      where: { id: input.addressId },
+    });
+    if (!address || address.userId !== user.id) {
+      throw new CheckoutError("The selected address does not belong to your account", 403);
+    }
+
+    const addressSnapshot = {
+      fullName: address.fullName,
+      phone: address.phone,
+      addressLine1: address.addressLine1,
+      addressLine2: address.addressLine2,
+      landmark: address.landmark,
+      city: address.city,
+      state: address.state,
+      postalCode: address.postalCode,
+      country: address.country,
+      type: address.type,
+    };
+
+    const order = await transaction.order.create({
       data: {
         orderNumber,
         idempotencyKey: input.idempotencyKey,
@@ -73,8 +96,8 @@ export async function createCheckoutOrder(
         taxPaise,
         shippingPaise,
         totalPaise,
-        billingAddressSnapshot: input.address,
-        shippingAddressSnapshot: input.address,
+        billingAddressSnapshot: addressSnapshot,
+        shippingAddressSnapshot: addressSnapshot,
         buyerSnapshot: {
           id: user.id,
           name: user.name,
@@ -91,7 +114,7 @@ export async function createCheckoutOrder(
             taxPaise,
             shippingPaise,
             totalPaise,
-            sellerSnapshot: { name: "WorkWay" },
+            sellerSnapshot: { name: "worklab" },
             items: {
               create: resolvedItems.map((item) => ({
                 productId: item.product.id,
@@ -114,7 +137,7 @@ export async function createCheckoutOrder(
                 productSnapshot: item.product,
                 offerSnapshot: {
                   variant: item.variant,
-                  voucher: input.voucher || null,
+                  voucher: voucher || null,
                 },
               })),
             },
@@ -122,5 +145,17 @@ export async function createCheckoutOrder(
         },
       },
     });
-  });
+
+    await transaction.orderAddress.create({
+      data: {
+        orderId: order.id,
+        sourceAddressId: address.isSaved ? address.id : null,
+        ...addressSnapshot,
+      },
+    });
+    if (!address.isSaved) {
+      await transaction.address.delete({ where: { id: address.id } });
+    }
+    return order;
+  }, { isolationLevel: "Serializable" });
 }

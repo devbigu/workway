@@ -4,7 +4,7 @@ import { AuthForm } from "@/features/auth/components/auth-form";
 
 export default function Page() {
   return (
-    <Suspense fallback={<main className="min-h-screen animate-pulse bg-[#f6f9fd]" />}>
+    <Suspense fallback={<main className="min-h-[70vh]" aria-busy="true" />}>
       <AuthForm mode="login" />
     </Suspense>
   );
